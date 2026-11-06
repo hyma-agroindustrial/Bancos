@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: hyma_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: hyma_user
+      POSTGRES_PASSWORD: hyma_password
+      POSTGRES_DB: hyma_fiscal
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  app:
+    build: .
+    container_name: hyma_app
+    restart: always
+    depends_on:
+      - db
+    environment:
+      - DATABASE_URL=postgresql://hyma_user:hyma_password@db:5432/hyma_fiscal
+    ports:
+      - "8000:8000"
+
+volumes:
+  pgdata:
+

@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hyma Agroindustrial · Control Fiscal & Gastos</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Alpine.js CDN -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.5/dist/cdn.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        agro: {
+                            50: '#f2f9f1',
+                            100: '#e1f2e0',
+                            500: '#2d8a39',
+                            600: '#226f2c',
+                            700: '#1c5824',
+                            900: '#113516',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans" x-data="agroApp()" x-init="initApp()" x-cloak>
+
+    <!-- NAVBAR SUPERIOR -->
+    <header class="bg-slate-950 border-b border-slate-800 sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-lg bg-emerald-600 flex items-center justify-center font-bold text-xl text-white shadow-lg shadow-emerald-900/50">
+                    🌱
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold text-white tracking-wide">HYMA AGROINDUSTRIAL</h1>
+                    <p class="text-xs text-slate-400">Sistema de Control de Gastos & Cuentas Fiscales</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center space-x-2">
+                <button @click="openModalCuenta = true" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-2 rounded-lg font-medium transition flex items-center gap-1.5">
+                    <span>🏦</span>
+                    <span>Nueva Cuenta</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- 1. RESUMEN DE CUENTAS BANCARIAS (SALDOS EN TIEMPO REAL) -->
+        <section>
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Cuentas Bancarias Registradas</h2>
+                <span class="text-xs text-slate-500">Actualizado con entradas y salidas</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <template x-for="cta in cuentas" :key="cta.id">
+                    <div class="bg-slate-800/80 border border-slate-700/80 rounded-xl p-4 shadow-sm hover:border-emerald-500/50 transition">
+                        <div class="flex justify-between items-start mb-2">
+                            <div>
+                                <span class="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800/60" x-text="cta.banco"></span>
+                                <h3 class="text-base font-bold text-white mt-1" x-text="cta.nombre"></h3>
+                            </div>
+                            <span class="text-xs text-slate-400 font-mono" x-text="'No. ' + cta.numero_cuenta"></span>
+                        </div>
+
+                        <div class="mt-4 pt-3 border-t border-slate-700/60 flex justify-between items-end">
+                            <div>
+                                <p class="text-xs text-slate-400">Saldo Contable Actual</p>
+                                <p class="text-xl font-black text-white" :class="cta.saldo_actual >= 0 ? 'text-emerald-400' : 'text-rose-400'" x-text="formatMoney(cta.saldo_actual)"></p>
+                            </div>
+                            <div class="text-right text-[11px] text-slate-400">
+                                <div><span class="text-emerald-400">+</span> <span x-text="formatMoney(cta.total_entradas)"></span></div>
+                                <div><span class="text-rose-400">-</span> <span x-text="formatMoney(cta.total_salidas)"></span></div>
+                            </div>
+                        </div>
+
+                        <div class="mt-2 text-[11px] text-slate-500 truncate font-mono">
+                            CLABE: <span class="text-slate-300" x-text="cta.clabe"></span>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </section>
+
+        <!-- 2. PESTAÑAS PRINCIPALES -->
+        <section class="bg-slate-950 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
+            <div class="border-b border-slate-800 bg-slate-900/60 px-4 flex space-x-4">
+                <button @click="activeTab = 'manual'" :class="activeTab === 'manual' ? 'border-emerald-500 text-emerald-400 font-bold' : 'border-transparent text-slate-400 hover:text-slate-200'" class="py-3.5 px-3 border-b-2 text-sm flex items-center gap-2 transition">
+                    <span>✍️</span> <span>Captura Manual</span>
+                </button>
+                <button @click="activeTab = 'pdf'" :class="activeTab === 'pdf' ? 'border-emerald-500 text-emerald-400 font-bold' : 'border-transparent text-slate-400 hover:text-slate-200'" class="py-3.5 px-3 border-b-2 text-sm flex items-center gap-2 transition">
+                    <span>📄</span> <span>Carga Estado de Cuenta (PDF)</span>
+                </button>
+                <button @click="activeTab = 'reportes'" :class="activeTab === 'reportes' ? 'border-emerald-500 text-emerald-400 font-bold' : 'border-transparent text-slate-400 hover:text-slate-200'" class="py-3.5 px-3 border-b-2 text-sm flex items-center gap-2 transition">
+                    <span>📊</span> <span>Reportes y Movimientos</span>
+                </button>
+            </div>
+
+            <!-- TAB 1: FORMULARIO DINÁMICO DE CAPTURA MANUAL -->
+            <div x-show="activeTab === 'manual'" class="p-6">
+                <form @submit.prevent="guardarTransaccionManual" class="space-y-5">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                        
+                        <!-- Cuenta Afectada -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1.5">Cuenta Bancaria *</label>
+                            <select x-model="form.cuenta_id" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500">
+                                <option value="">Selecciona cuenta...</option>
+                                <template x-for="cta in cuentas" :key="cta.id">
+                                    <option :value="cta.id" x-text="cta.nombre + ' (' + cta.banco + ')'"></option>
+                                </template>
+                            </select>
+                        </div>
+
+                        <!-- Tipo de Movimiento -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1.5">Tipo de Movimiento *</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button type="button" @click="form.tipo = 'ENTRADA'; onTipoChange()" :class="form.tipo === 'ENTRADA' ? 'bg-emerald-600 text-white font-bold' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'" class="py-2 text-xs rounded-lg border border-slate-700 transition">
+                                    📥 Entrada (Abono)
+                                </button>
+                                <button type="button" @click="form.tipo = 'SALIDA'; onTipoChange()" :class="form.tipo === 'SALIDA' ? 'bg-rose-600 text-white font-bold' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'" class="py-2 text-xs rounded-lg border border-slate-700 transition">
+                                    📤 Salida (Gasto)
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Fecha -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1.5">Fecha de Operación *</label>
+                            <input type="date" x-model="form.fecha" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                        <!-- Categoría Dinámica -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1.5">Categoría Fiscal *</label>
+                            <select x-model="form.categoria_id" @change="onCategoriaChange()" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500">
+                                <option value="">Selecciona categoría...</option>
+                                <template x-for="cat in categoriasFiltradas" :key="cat.id">
+                                    <option :value="cat.id" x-text="cat.nombre"></option>
+                                </template>
+                            </select>
+                        </div>
+
+                        <!-- Input Condicional: Cliente / Gasolinera / Proveedor -->
+                        <div>
+                            <div class="flex justify-between items-center mb-1.5">
+                                <label class="text-xs font-semibold text-slate-300" x-text="labelEntidadDinamica"></label>
+                                <button type="button" @click="abrirModalCrearEntidad()" class="text-[11px] text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-semibold">
+                                    <span>➕</span> <span>Agregar al vuelo</span>
+                                </button>
+                            </div>
+
+                            <select x-model="form.entidad_id" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500">
+                                <option value="">Selecciona <span x-text="labelEntidadDinamica"></span>...</option>
+                                <template x-for="ent in entidadesFiltradas" :key="ent.id">
+                                    <option :value="ent.id" x-text="ent.nombre + (ent.rfc ? ' (' + ent.rfc + ')' : '')"></option>
+                                </template>
+                            </select>
+                        </div>
+
+                        <!-- Monto -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1.5">Monto Total ($ MXN) *</label>
+                            <div class="relative">
+                                <span class="absolute left-3 top-2 text-slate-500 text-sm">$</span>
+                                <input type="number" step="0.01" min="0.01" x-model="form.monto" required placeholder="0.00" class="w-full bg-slate-900 border border-slate-700 rounded-lg pl-7 pr-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 font-mono text-lg font-semibold">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <!-- Concepto / Descripción -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1.5">Concepto o Descripción Bancaria *</label>
+                            <input type="text" x-model="form.concepto" required placeholder="Ej. Diésel para tractor John Deere lote norte" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500">
+                        </div>
+
+                        <!-- Referencia / Folio -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1.5">Referencia o Folio SPEI (Opcional)</label>
+                            <input type="text" x-model="form.referencia" placeholder="Ej. Folio 984128 / Factura A-102" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 font-mono">
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end pt-3 border-t border-slate-800">
+                        <button type="submit" :disabled="loading" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm px-6 py-2.5 rounded-lg shadow-lg shadow-emerald-900/40 transition flex items-center gap-2">
+                            <span x-show="loading" class="animate-spin">⏳</span>
+                            <span>Registrar Movimiento</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- TAB 2: EXTRACCIÓN AUTOMATIZADA DE PDF BANCARIO -->
+            <div x-show="activeTab === 'pdf'" class="p-6 space-y-6">
+                <div class="bg-slate-900 border border-dashed border-slate-700 rounded-xl p-8 text-center max-w-2xl mx-auto">
+                    <div class="text-4xl mb-3">📑</div>
+                    <h3 class="text-base font-bold text-white mb-1">Cargar Estado de Cuenta Bancario en PDF</h3>
+                    <p class="text-xs text-slate-400 mb-4">El motor extraerá automáticamente fecha, concepto, abonos (entradas) y cargos (salidas) utilizando <code class="text-emerald-400 font-mono">pdfplumber</code>.</p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-left mb-5">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Cuenta Bancaria Destino *</label>
+                            <select x-model="pdfCuentaId" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white">
+                                <option value="">Selecciona cuenta...</option>
+                                <template x-for="cta in cuentas" :key="cta.id">
+                                    <option :value="cta.id" x-text="cta.nombre + ' (' + cta.banco + ')'"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Archivo PDF *</label>
+                            <input type="file" accept=".pdf" @change="onPdfFileSelected" class="w-full text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-500">
+                        </div>
+                    </div>
+
+                    <button @click="procesarPdf" :disabled="loading || !pdfFile || !pdfCuentaId" class="bg-emerald-600 disabled:opacity-40 hover:bg-emerald-500 text-white font-bold text-xs px-5 py-2.5 rounded-lg transition shadow-md">
+                        <span x-show="loading">Procesando documento...</span>
+                        <span x-show="!loading">🚀 Analizar y Extraer Movimientos</span>
+                    </button>
+                </div>
+
+                <!-- TABLA DE MOVIMIENTOS EXTRAÍDOS PARA REVISIÓN -->
+                <div x-show="movimientosExtraidos.length > 0" class="space-y-3">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h4 class="text-sm font-bold text-white">Movimientos Extraídos del PDF</h4>
+                            <p class="text-xs text-slate-400">Revisa la clasificación antes de confirmar el guardado en base de datos.</p>
+                        </div>
+                        <button @click="guardarLotePdf" :disabled="loading" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-lg transition">
+                            💾 Confirmar e Importar (<span x-text="movimientosExtraidos.filter(m => !m.es_duplicado).length"></span>) Movimientos
+                        </button>
+                    </div>
+
+                    <div class="overflow-x-auto border border-slate-800 rounded-xl">
+                        <table class="w-full text-left text-xs text-slate-300">
+                            <thead class="bg-slate-900 text-slate-400 uppercase font-semibold text-[10px]">
+                                <tr>
+                                    <th class="p-3">Estado</th>
+                                    <th class="p-3">Fecha</th>
+                                    <th class="p-3">Concepto</th>
+                                    <th class="p-3">Tipo</th>
+                                    <th class="p-3">Monto</th>
+                                    <th class="p-3">Categoría Asignada</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800/80">
+                                <template x-for="(m, idx) in movimientosExtraidos" :key="idx">
+                                    <tr :class="m.es_duplicado ? 'bg-rose-950/20 opacity-60' : 'hover:bg-slate-900/50'">
+                                        <td class="p-3">
+                                            <span x-show="m.es_duplicado" class="px-2 py-0.5 rounded text-[10px] bg-rose-900 text-rose-300 font-bold">Duplicado</span>
+                                            <span x-show="!m.es_duplicado" class="px-2 py-0.5 rounded text-[10px] bg-emerald-950 text-emerald-300 font-bold">Nuevo</span>
+                                        </td>
+                                        <td class="p-3 font-mono" x-text="m.fecha"></td>
+                                        <td class="p-3 font-medium text-white max-w-xs truncate" x-text="m.concepto"></td>
+                                        <td class="p-3">
+                                            <span :class="m.tipo === 'ENTRADA' ? 'text-emerald-400' : 'text-rose-400'" class="font-bold" x-text="m.tipo"></span>
+                                        </td>
+                                        <td class="p-3 font-mono font-bold" :class="m.tipo === 'ENTRADA' ? 'text-emerald-400' : 'text-rose-400'" x-text="formatMoney(m.monto)"></td>
+                                        <td class="p-3">
+                                            <select x-model="m.categoria_id_sugerida" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white">
+                                                <option value="">Sin categoría...</option>
+                                                <template x-for="cat in categorias" :key="cat.id">
+                                                    <option :value="cat.id" x-text="cat.nombre"></option>
+                                                </template>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: REPORTES Y LISTA DE MOVIMIENTOS -->
+            <div x-show="activeTab === 'reportes'" class="p-6 space-y-6">
+                <!-- BARRA DE FILTROS -->
+                <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-400 mb-1">Cuenta</label>
+                        <select x-model="filtros.cuenta_id" @change="filtrarTransacciones" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
+                            <option value="">Todas las cuentas</option>
+                            <template x-for="cta in cuentas" :key="cta.id">
+                                <option :value="cta.id" x-text="cta.nombre"></option>
+                            </template>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-400 mb-1">Categoría</label>
+                        <select x-model="filtros.categoria_id" @change="filtrarTransacciones" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
+                            <option value="">Todas las categorías</option>
+                            <template x-for="cat in categorias" :key="cat.id">
+                                <option :value="cat.id" x-text="cat.nombre"></option>
+                            </template>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-400 mb-1">Cliente / Proveedor</label>
+                        <select x-model="filtros.entidad_id" @change="filtrarTransacciones" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
+                            <option value="">Todos</option>
+                            <template x-for="ent in entidades" :key="ent.id">
+                                <option :value="ent.id" x-text="ent.nombre"></option>
+                            </template>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-400 mb-1">Fecha Desde</label>
+                        <input type="date" x-model="filtros.fecha_inicio" @change="filtrarTransacciones" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white">
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-400 mb-1">Fecha Hasta</label>
+                        <input type="date" x-model="filtros.fecha_fin" @change="filtrarTransacciones" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white">
+                    </div>
+                </div>
+
+                <!-- RESUMEN DE SALDOS DEL REPORTE -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                        <p class="text-xs text-slate-400 font-semibold">Total Entradas (Cobranza / Depósitos)</p>
+                        <p class="text-xl font-bold text-emerald-400 font-mono mt-1" x-text="formatMoney(resumenReporte.total_entradas)"></p>
+                    </div>
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                        <p class="text-xs text-slate-400 font-semibold">Total Salidas (Gastos / Proveedores)</p>
+                        <p class="text-xl font-bold text-rose-400 font-mono mt-1" x-text="formatMoney(resumenReporte.total_salidas)"></p>
+                    </div>
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                        <p class="text-xs text-slate-400 font-semibold">Flujo Neto del Periodo</p>
+                        <p class="text-xl font-bold font-mono mt-1" :class="resumenReporte.balance_periodo >= 0 ? 'text-emerald-400' : 'text-rose-400'" x-text="formatMoney(resumenReporte.balance_periodo)"></p>
+                    </div>
+                </div>
+
+                <!-- TABLA HISTORIAL DE MOVIMIENTOS -->
+                <div class="overflow-x-auto border border-slate-800 rounded-xl">
+                    <table class="w-full text-left text-xs text-slate-300">
+                        <thead class="bg-slate-900 text-slate-400 uppercase font-semibold text-[10px]">
+                            <tr>
+                                <th class="p-3">Fecha</th>
+                                <th class="p-3">Cuenta</th>
+                                <th class="p-3">Concepto</th>
+                                <th class="p-3">Categoría</th>
+                                <th class="p-3">Cliente / Proveedor</th>
+                                <th class="p-3 text-right">Monto</th>
+                                <th class="p-3">Origen</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800/80">
+                            <template x-for="t in transacciones" :key="t.id">
+                                <tr class="hover:bg-slate-900/50">
+                                    <td class="p-3 font-mono text-slate-400" x-text="t.fecha"></td>
+                                    <td class="p-3 font-semibold text-slate-200" x-text="t.cuenta_nombre"></td>
+                                    <td class="p-3 font-medium text-white max-w-sm truncate" x-text="t.concepto"></td>
+                                    <td class="p-3">
+                                        <span class="px-2 py-0.5 rounded text-[11px] bg-slate-800 text-slate-300 border border-slate-700" x-text="t.categoria_nombre || 'Sin Asignar'"></span>
+                                    </td>
+                                    <td class="p-3 text-emerald-400 font-medium" x-text="t.entidad_nombre || '-'"></td>
+                                    <td class="p-3 text-right font-mono font-bold" :class="t.tipo === 'ENTRADA' ? 'text-emerald-400' : 'text-rose-400'" x-text="(t.tipo === 'ENTRADA' ? '+' : '-') + ' ' + formatMoney(t.monto)"></td>
+                                    <td class="p-3">
+                                        <span class="text-[10px] font-mono px-1.5 py-0.5 rounded" :class="t.origen === 'PDF_EXTRACT' ? 'bg-indigo-950 text-indigo-300' : 'bg-slate-800 text-slate-400'" x-text="t.origen"></span>
+                                    </td>
+                                </tr>
+                            </template>
+                            <tr x-show="transacciones.length === 0">
+                                <td colspan="7" class="p-8 text-center text-slate-500">No se encontraron movimientos con los filtros aplicados.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- MODAL: AGREGAR ENTIDAD AL VUELO (CLIENTE / PROVEEDOR / GASOLINERA) -->
+    <div x-show="openModalEntidad" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm" x-cloak>
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl" @click.away="openModalEntidad = false">
+            <h3 class="text-base font-bold text-white mb-1" x-text="'➕ Agregar Nuevo ' + labelModalEntidad"></h3>
+            <p class="text-xs text-slate-400 mb-4">Se guardará automáticamente para autocompletar en futuras capturas.</p>
+
+            <form @submit.prevent="guardarEntidadAlVuelo" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Nombre o Razón Social *</label>
+                    <input type="text" x-model="modalEntidad.nombre" required placeholder="Ej. Gasolinera Oxxo Gas Valle Alto" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Tipo de Entidad</label>
+                    <input type="text" x-model="modalEntidad.tipo_entidad" readonly class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-400 font-mono">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">RFC (Opcional)</label>
+                    <input type="text" x-model="modalEntidad.rfc" maxlength="13" placeholder="XAXX010101000" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white uppercase font-mono">
+                </div>
+
+                <div class="flex justify-end space-x-2 pt-3 border-t border-slate-800">
+                    <button type="button" @click="openModalEntidad = false" class="px-4 py-2 text-xs text-slate-400 hover:text-white">Cancelar</button>
+                    <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-lg">Guardar y Seleccionar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: AGREGAR CUENTA BANCARIA -->
+    <div x-show="openModalCuenta" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm" x-cloak>
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl" @click.away="openModalCuenta = false">
+            <h3 class="text-base font-bold text-white mb-1">🏦 Registrar Nueva Cuenta Bancaria Fiscal</h3>
+            <p class="text-xs text-slate-400 mb-4">Ingresa los datos exactos del contrato o estado de cuenta.</p>
+
+            <form @submit.prevent="guardarCuenta" class="space-y-4">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Nombre Descriptivo *</label>
+                        <input type="text" x-model="nuevaCuenta.nombre" required placeholder="Ej. Fiscal Principal" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Institución Bancaria *</label>
+                        <input type="text" x-model="nuevaCuenta.banco" required placeholder="Ej. BBVA / Banorte" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">CLABE Interbancaria (18 dígitos) *</label>
+                    <input type="text" x-model="nuevaCuenta.clabe" maxlength="18" minlength="18" required placeholder="012180001234567890" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Número de Cuenta *</label>
+                        <input type="text" x-model="nuevaCuenta.numero_cuenta" required placeholder="0123456789" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Saldo Inicial ($)</label>
+                        <input type="number" step="0.01" x-model="nuevaCuenta.saldo_inicial" required class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono">
+                    </div>
+                </div>
+
+                <div class="flex justify-end space-x-2 pt-3 border-t border-slate-800">
+                    <button type="button" @click="openModalCuenta = false" class="px-4 py-2 text-xs text-slate-400 hover:text-white">Cancelar</button>
+                    <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-lg">Guardar Cuenta</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- LOGICA ALPINE JS -->
+    <script>
+        function agroApp() {
+            return {
+                activeTab: 'manual',
+                loading: false,
+                cuentas: [],
+                categorias: [],
+                entidades: [],
+                transacciones: [],
+                movimientosExtraidos: [],
+                pdfFile: null,
+                pdfCuentaId: '',
+                openModalEntidad: false,
+                openModalCuenta: false,
+                labelEntidadDinamica: 'Cliente / Proveedor',
+                labelModalEntidad: 'Entidad',
+                
+                form: {
+                    cuenta_id: '',
+                    tipo: 'SALIDA',
+                    categoria_id: '',
+                    entidad_id: '',
+                    monto: '',
+                    fecha: new Date().toISOString().split('T')[0],
+                    concepto: '',
+                    referencia: ''
+                },
+
+                modalEntidad: {
+                    nombre: '',
+                    tipo_entidad: 'CLIENTE',
+                    rfc: ''
+                },
+
+                nuevaCuenta: {
+                    nombre: '',
+                    banco: '',
+                    clabe: '',
+                    numero_cuenta: '',
+                    saldo_inicial: 0.0,
+                    moneda: 'MXN'
+                },
+
+                filtros: {
+                    cuenta_id: '',
+                    categoria_id: '',
+                    entidad_id: '',
+                    fecha_inicio: '',
+                    fecha_fin: ''
+                },
+
+                resumenReporte: {
+                    total_entradas: 0,
+                    total_salidas: 0,
+                    balance_periodo: 0
+                },
+
+                async initApp() {
+                    await this.cargarCuentas();
+                    await this.cargarCategorias();
+                    await this.cargarEntidades();
+                    await this.filtrarTransacciones();
+                },
+
+                async cargarCuentas() {
+                    const res = await fetch('/api/cuentas');
+                    if (res.ok) {
+                        this.cuentas = await res.json();
+                        if (this.cuentas.length > 0 && !this.form.cuenta_id) {
+                            this.form.cuenta_id = this.cuentas[0].id;
+                            this.pdfCuentaId = this.cuentas[0].id;
+                        }
+                    }
+                },
+
+                async cargarCategorias() {
+                    const res = await fetch('/api/categorias');
+                    if (res.ok) this.categorias = await res.json();
+                },
+
+                async cargarEntidades() {
+                    const res = await fetch('/api/entidades');
+                    if (res.ok) this.entidades = await res.json();
+                },
+
+                get categoriasFiltradas() {
+                    return this.categorias.filter(c => c.tipo === this.form.tipo || c.tipo === 'AMBOS');
+                },
+
+                get entidadesFiltradas() {
+                    const catActual = this.categorias.find(c => c.id == this.form.categoria_id);
+                    if (!catActual || catActual.tipo_entidad_sugerida === 'GENERAL') {
+                        return this.entidades;
+                    }
+                    return this.entidades.filter(e => e.tipo_entidad === catActual.tipo_entidad_sugerida);
+                },
+
+                onTipoChange() {
+                    this.form.categoria_id = '';
+                    this.form.entidad_id = '';
+                    this.labelEntidadDinamica = 'Cliente / Proveedor';
+                },
+
+                onCategoriaChange() {
+                    const cat = this.categorias.find(c => c.id == this.form.categoria_id);
+                    if (!cat) {
+                        this.labelEntidadDinamica = 'Cliente / Proveedor';
+                        return;
+                    }
+
+                    if (cat.tipo_entidad_sugerida === 'CLIENTE') {
+                        this.labelEntidadDinamica = 'Cliente Comprador *';
+                        this.labelModalEntidad = 'Cliente';
+                        this.modalEntidad.tipo_entidad = 'CLIENTE';
+                    } else if (cat.tipo_entidad_sugerida === 'GASOLINERA') {
+                        this.labelEntidadDinamica = 'Gasolinera / Estación *';
+                        this.labelModalEntidad = 'Gasolinera';
+                        this.modalEntidad.tipo_entidad = 'GASOLINERA';
+                    } else if (cat.tipo_entidad_sugerida === 'PROVEEDOR') {
+                        this.labelEntidadDinamica = 'Proveedor Insumos *';
+                        this.labelModalEntidad = 'Proveedor';
+                        this.modalEntidad.tipo_entidad = 'PROVEEDOR';
+                    } else if (cat.tipo_entidad_sugerida === 'EMPLEADO') {
+                        this.labelEntidadDinamica = 'Empleado / Jornalero *';
+                        this.labelModalEntidad = 'Empleado';
+                        this.modalEntidad.tipo_entidad = 'EMPLEADO';
+                    } else {
+                        this.labelEntidadDinamica = 'Tercero Relacionado';
+                        this.labelModalEntidad = 'Entidad';
+                        this.modalEntidad.tipo_entidad = 'GENERAL';
+                    }
+                },
+
+                abrirModalCrearEntidad() {
+                    this.modalEntidad.nombre = '';
+                    this.modalEntidad.rfc = '';
+                    this.openModalEntidad = true;
+                },
+
+                async guardarEntidadAlVuelo() {
+                    const res = await fetch('/api/entidades', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(this.modalEntidad)
+                    });
+                    if (res.ok) {
+                        const nueva = await res.json();
+                        await this.cargarEntidades();
+                        this.form.entidad_id = nueva.id;
+                        this.openModalEntidad = false;
+                    }
+                },
+
+                async guardarCuenta() {
+                    const res = await fetch('/api/cuentas', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(this.nuevaCuenta)
+                    });
+                    if (res.ok) {
+                        await this.cargarCuentas();
+                        this.openModalCuenta = false;
+                        this.nuevaCuenta.nombre = '';
+                        this.nuevaCuenta.clabe = '';
+                        this.nuevaCuenta.numero_cuenta = '';
+                    } else {
+                        const err = await res.json();
+                        alert(err.detail || 'Error al guardar la cuenta');
+                    }
+                },
+
+                async guardarTransaccionManual() {
+                    this.loading = true;
+                    try {
+                        const res = await fetch('/api/transacciones', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(this.form)
+                        });
+                        if (res.ok) {
+                            alert('✅ Movimiento registrado con éxito.');
+                            this.form.monto = '';
+                            this.form.concepto = '';
+                            this.form.referencia = '';
+                            await this.cargarCuentas();
+                            await this.filtrarTransacciones();
+                        } else {
+                            const err = await res.json();
+                            alert(err.detail || 'Error al registrar.');
+                        }
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                onPdfFileSelected(event) {
+                    this.pdfFile = event.target.files[0];
+                },
+
+                async procesarPdf() {
+                    if (!this.pdfFile || !this.pdfCuentaId) return;
+                    this.loading = true;
+                    const formData = new FormData();
+                    formData.append('cuenta_id', this.pdfCuentaId);
+                    formData.append('file', this.pdfFile);
+
+                    try {
+                        const res = await fetch('/api/transacciones/upload-pdf', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        if (res.ok) {
+                            this.movimientosExtraidos = await res.json();
+                        } else {
+                            const err = await res.json();
+                            alert(err.detail || 'Error al procesar el archivo PDF');
+                        }
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async guardarLotePdf() {
+                    this.loading = true;
+                    try {
+                        const payload = {
+                            cuenta_id: parseInt(this.pdfCuentaId),
+                            archivo_nombre: this.pdfFile.name,
+                            movimientos: this.movimientosExtraidos
+                        };
+                        const res = await fetch('/api/transacciones/batch-import', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        if (res.ok) {
+                            const data = await res.json();
+                            alert(data.message);
+                            this.movimientosExtraidos = [];
+                            this.pdfFile = null;
+                            await this.cargarCuentas();
+                            await this.filtrarTransacciones();
+                            this.activeTab = 'reportes';
+                        }
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async filtrarTransacciones() {
+                    const params = new URLSearchParams();
+                    if (this.filtros.cuenta_id) params.append('cuenta_id', this.filtros.cuenta_id);
+                    if (this.filtros.categoria_id) params.append('categoria_id', this.filtros.categoria_id);
+                    if (this.filtros.entidad_id) params.append('entidad_id', this.filtros.entidad_id);
+                    if (this.filtros.fecha_inicio) params.append('fecha_inicio', this.filtros.fecha_inicio);
+                    if (this.filtros.fecha_fin) params.append('fecha_fin', this.filtros.fecha_fin);
+
+                    const [resTr, resRep] = await Promise.all([
+                        fetch(`/api/transacciones?${params.toString()}`),
+                        fetch(`/api/reportes/resumen?${params.toString()}`)
+                    ]);
+
+                    if (resTr.ok) this.transacciones = await resTr.json();
+                    if (resRep.ok) this.resumenReporte = await resRep.json();
+                },
+
+                formatMoney(amount) {
+                    if (amount === undefined || amount === null) return '$0.00';
+                    return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(amount);
+                }
+            }
+        }
+    </script>
+</body>
+</html>
+
