@@ -308,8 +308,14 @@ def modificar_cuenta(cuenta_id: int, datos: CuentaUpdate, db: Session = Depends(
 
     if datos.nombre is not None:
         cuenta.nombre = datos.nombre.strip()
+    if datos.rfc_empresa is not None:
+        cuenta.rfc_empresa = datos.rfc_empresa.strip() if datos.rfc_empresa else None
+    if datos.logo_empresa is not None:
+        cuenta.logo_empresa = datos.logo_empresa
     if datos.banco is not None:
         cuenta.banco = datos.banco.strip()
+    if datos.logo_banco is not None:
+        cuenta.logo_banco = datos.logo_banco
     if datos.saldo_inicial is not None:
         cuenta.saldo_inicial = datos.saldo_inicial
     if datos.moneda is not None:
@@ -844,7 +850,10 @@ def generar_estado_cuenta_mensual(
         "cuenta": {
             "id": cuenta.id,
             "nombre": cuenta.nombre,
+            "rfc_empresa": cuenta.rfc_empresa,
+            "logo_empresa": cuenta.logo_empresa,
             "banco": cuenta.banco,
+            "logo_banco": cuenta.logo_banco,
             "clabe": cuenta.clabe,
             "numero_cuenta": cuenta.numero_cuenta,
             "moneda": cuenta.moneda

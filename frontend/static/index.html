@@ -29,12 +29,19 @@
     <style>
         [x-cloak] { display: none !important; }
 
+        @page {
+            size: portrait;
+            margin: 8mm 10mm;
+        }
+
         @media print {
             body {
                 background: #ffffff !important;
                 color: #0f172a !important;
                 padding: 0 !important;
                 margin: 0 !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
             }
             header, .no-print, button, select, input, .fixed {
                 display: none !important;
@@ -43,6 +50,7 @@
                 max-width: 100% !important;
                 padding: 0 !important;
                 margin: 0 !important;
+                width: 100% !important;
             }
             .print-document {
                 background: #ffffff !important;
@@ -52,26 +60,54 @@
                 padding: 0 !important;
                 margin: 0 !important;
                 width: 100% !important;
+                max-width: 100% !important;
             }
             .print-card {
                 background: #f8fafc !important;
                 border: 1px solid #cbd5e1 !important;
                 color: #0f172a !important;
             }
+            .print-table {
+                width: 100% !important;
+                table-layout: fixed !important;
+                border-collapse: collapse !important;
+            }
             .print-table th {
                 background: #f1f5f9 !important;
                 color: #0f172a !important;
                 border-bottom: 2px solid #94a3b8 !important;
+                padding: 6px 4px !important;
+                font-size: 8pt !important;
+                font-weight: bold !important;
+                word-wrap: break-word !important;
             }
             .print-table td {
                 color: #0f172a !important;
                 border-bottom: 1px solid #e2e8f0 !important;
+                padding: 5px 4px !important;
+                font-size: 7.8pt !important;
+                word-wrap: break-word !important;
+                overflow-wrap: break-word !important;
+            }
+            .print-table thead {
+                display: table-header-group !important;
+            }
+            .print-table tr {
+                page-break-inside: avoid !important;
             }
             .print-dark-text {
                 color: #0f172a !important;
             }
             .print-muted-text {
                 color: #64748b !important;
+            }
+            .print-badge-abono {
+                color: #047857 !important;
+                font-weight: bold !important;
+            }
+            .print-badge-cargo {
+                color: #be123c !important;
+                font-weight: bold !important;
             }
         }
     </style>
@@ -195,23 +231,48 @@
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <template x-for="cta in cuentas" :key="cta.id">
-                    <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 shadow-sm hover:border-emerald-500/50 transition relative group">
+                    <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 shadow-sm hover:border-emerald-500/50 transition relative group flex flex-col justify-between">
                         
                         <!-- Acciones: Modificar y Eliminar -->
-                        <div class="absolute top-3 right-3 flex space-x-1.5">
-                            <button @click="abrirModalEditarCuenta(cta)" title="Modificar Datos de Cuenta" class="p-1.5 text-slate-400 hover:text-white bg-slate-900 hover:bg-slate-700 rounded-lg text-xs transition">
+                        <div class="absolute top-3 right-3 flex space-x-1.5 z-10">
+                            <button @click="abrirModalEditarCuenta(cta)" title="Modificar Datos y Logos" class="p-1.5 text-slate-400 hover:text-white bg-slate-900/90 hover:bg-slate-700 rounded-lg text-xs transition border border-slate-700 shadow">
                                 ✏️
                             </button>
-                            <button @click="eliminarCuenta(cta)" title="Eliminar Cuenta" class="p-1.5 text-slate-400 hover:text-rose-400 bg-slate-900 hover:bg-rose-950 rounded-lg text-xs transition">
+                            <button @click="eliminarCuenta(cta)" title="Eliminar Cuenta" class="p-1.5 text-slate-400 hover:text-rose-400 bg-slate-900/90 hover:bg-rose-950 rounded-lg text-xs transition border border-slate-700 shadow">
                                 🗑️
                             </button>
                         </div>
 
-                        <div class="pr-16">
-                            <span class="text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800/60" x-text="cta.banco"></span>
-                            <h3 class="text-base font-bold text-white mt-1" x-text="cta.nombre"></h3>
+                        <!-- Encabezado de la Tarjeta con Logos -->
+                        <div class="flex items-start gap-3 pr-16">
+                            <!-- Logo Empresa -->
+                            <div class="w-11 h-11 rounded-xl bg-slate-900 border border-slate-700 p-1 flex items-center justify-center shrink-0 overflow-hidden shadow-inner">
+                                <template x-if="cta.logo_empresa">
+                                    <img :src="cta.logo_empresa" alt="Empresa" class="w-full h-full object-contain rounded">
+                                </template>
+                                <template x-if="!cta.logo_empresa && config.logo_url">
+                                    <img :src="config.logo_url" alt="Empresa" class="w-full h-full object-contain rounded">
+                                </template>
+                                <template x-if="!cta.logo_empresa && !config.logo_url">
+                                    <span class="text-sm font-bold text-emerald-400">🏢</span>
+                                </template>
+                            </div>
+
+                            <!-- Info Empresa y Banco -->
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-1.5 flex-wrap">
+                                    <!-- Badge Banco con estilo oficial -->
+                                    <span class="text-[10px] font-black px-2 py-0.5 rounded shadow-sm flex items-center gap-1 leading-tight"
+                                          :style="'background:' + getBankStyle(cta.banco, cta.logo_banco).bg + '; color:' + getBankStyle(cta.banco, cta.logo_banco).text + '; border: 1px solid ' + getBankStyle(cta.banco, cta.logo_banco).border">
+                                        <span x-text="cta.banco"></span>
+                                    </span>
+                                    <span x-show="cta.rfc_empresa" class="text-[9px] font-mono text-slate-400 px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 leading-tight" x-text="cta.rfc_empresa"></span>
+                                </div>
+                                <h3 class="text-sm font-bold text-white mt-1 truncate" :title="cta.nombre" x-text="cta.nombre"></h3>
+                            </div>
                         </div>
 
+                        <!-- Saldo Contable -->
                         <div class="mt-4 pt-3 border-t border-slate-700/60 flex justify-between items-end">
                             <div>
                                 <p class="text-[11px] text-slate-400">Saldo Contable Actual</p>
@@ -223,6 +284,7 @@
                             </div>
                         </div>
 
+                        <!-- Datos de Cuenta y CLABE -->
                         <div class="mt-2.5 pt-2 border-t border-slate-700/40 text-[11px] text-slate-400 space-y-0.5 font-mono">
                             <div>Cuenta: <span class="text-slate-200" x-text="cta.numero_cuenta"></span></div>
                             <div class="truncate">CLABE: <span class="text-slate-200" x-text="cta.clabe"></span></div>
@@ -621,50 +683,61 @@
                 <!-- CONTENEDOR DEL DOCUMENTO OFICIAL DE CORTE / ESTADO DE CUENTA -->
                 <div x-show="datosEstadoCuenta" class="bg-slate-950 border border-slate-800 rounded-2xl p-6 sm:p-8 space-y-6 shadow-2xl print-document">
                     
-                    <!-- ENCABEZADO INSTITUCIONAL MEMBRETADO -->
-                    <div class="border-b border-slate-800 pb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                        <div class="flex items-center space-x-4">
-                            <template x-if="config.logo_url">
-                                <img :src="config.logo_url" alt="Logo" class="w-14 h-14 object-contain rounded-xl border border-slate-800 p-1 bg-slate-900">
-                            </template>
-                            <template x-if="!config.logo_url">
-                                <div class="w-14 h-14 rounded-xl bg-emerald-600 flex items-center justify-center font-bold text-2xl text-white shadow-lg">
-                                    🏛️
+                    <!-- ENCABEZADO INSTITUCIONAL TRIPARTITO OFICIAL (EMPRESA + TÍTULO + BANCO) -->
+                    <div class="border-b-2 border-slate-700/80 pb-5 mb-4">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                            
+                            <!-- LADO IZQUIERDO: LOGO Y DATOS DE LA EMPRESA -->
+                            <div class="flex items-center space-x-3.5">
+                                <div class="w-16 h-16 rounded-2xl bg-slate-900 border border-slate-700 p-1.5 flex items-center justify-center shrink-0 overflow-hidden shadow-md print-card">
+                                    <template x-if="datosEstadoCuenta && datosEstadoCuenta.cuenta.logo_empresa">
+                                        <img :src="datosEstadoCuenta.cuenta.logo_empresa" alt="Empresa" class="w-full h-full object-contain">
+                                    </template>
+                                    <template x-if="(!datosEstadoCuenta || !datosEstadoCuenta.cuenta.logo_empresa) && config.logo_url">
+                                        <img :src="config.logo_url" alt="Empresa" class="w-full h-full object-contain">
+                                    </template>
+                                    <template x-if="(!datosEstadoCuenta || !datosEstadoCuenta.cuenta.logo_empresa) && !config.logo_url">
+                                        <div class="w-full h-full bg-emerald-700 text-white font-black text-2xl flex items-center justify-center rounded-xl">
+                                            🏢
+                                        </div>
+                                    </template>
                                 </div>
-                            </template>
-                            <div>
-                                <h2 class="text-lg sm:text-xl font-black text-white tracking-wide uppercase print-dark-text" x-text="config.nombre_sistema || 'HYMA AGROINDUSTRIAL'"></h2>
-                                <p class="text-xs text-slate-400 print-muted-text">Sistema de Control de Gastos & Cuentas Fiscales</p>
-                                <p class="text-[11px] font-mono text-emerald-400 font-semibold print-dark-text mt-0.5">RFC: HAG161013U20</p>
+                                <div>
+                                    <h2 class="text-lg sm:text-xl font-black text-white tracking-wide uppercase print-dark-text" x-text="datosEstadoCuenta ? datosEstadoCuenta.cuenta.nombre : (config.nombre_sistema || 'HYMA AGROINDUSTRIAL')"></h2>
+                                    <p class="text-xs text-slate-400 print-muted-text">Sistema de Control de Gastos & Cuentas Fiscales</p>
+                                    <p class="text-xs font-mono text-emerald-400 font-bold print-dark-text mt-0.5" x-text="'RFC: ' + (datosEstadoCuenta && datosEstadoCuenta.cuenta.rfc_empresa ? datosEstadoCuenta.cuenta.rfc_empresa : 'HAG161013U20')"></p>
+                                </div>
                             </div>
-                        </div>
 
-                        <div class="text-left md:text-right">
-                            <span class="inline-block px-3 py-1 rounded-full text-xs font-black tracking-wider uppercase bg-emerald-950 text-emerald-400 border border-emerald-800/80 mb-1 print-card">
-                                ESTADO DE CUENTA / CORTE MENSUAL
-                            </span>
-                            <div class="text-xs text-slate-300 font-mono print-dark-text" x-text="'Periodo: Del ' + (datosEstadoCuenta ? datosEstadoCuenta.periodo.fecha_inicio : '') + ' al ' + (datosEstadoCuenta ? datosEstadoCuenta.periodo.fecha_fin : '')"></div>
-                            <div class="text-[10px] text-slate-500 font-mono print-muted-text" x-text="'Mes: ' + (datosEstadoCuenta ? datosEstadoCuenta.periodo.mes_nombre : '') + ' ' + (datosEstadoCuenta ? datosEstadoCuenta.periodo.anio : '')"></div>
-                        </div>
-                    </div>
+                            <!-- CENTRO: TÍTULO Y PERIODO FISCAL -->
+                            <div class="text-left md:text-center">
+                                <span class="inline-block px-3 py-1 rounded-full text-[11px] font-black tracking-wider uppercase bg-emerald-950 text-emerald-400 border border-emerald-800/80 mb-1 print-card">
+                                    ESTADO DE CUENTA & CONCILIACIÓN FISCAL
+                                </span>
+                                <div class="text-xs text-slate-200 font-mono font-bold print-dark-text" x-text="'Periodo: Del ' + (datosEstadoCuenta ? datosEstadoCuenta.periodo.fecha_inicio : '') + ' al ' + (datosEstadoCuenta ? datosEstadoCuenta.periodo.fecha_fin : '')"></div>
+                                <div class="text-[11px] text-slate-400 font-mono print-muted-text font-semibold" x-text="'Mes: ' + (datosEstadoCuenta ? datosEstadoCuenta.periodo.mes_nombre : '') + ' ' + (datosEstadoCuenta ? datosEstadoCuenta.periodo.anio : '')"></div>
+                            </div>
 
-                    <!-- FICHA TÉCNICA DE LA CUENTA BANCARIA -->
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-900/60 p-4 rounded-xl border border-slate-800 print-card text-xs">
-                        <div>
-                            <span class="text-[10px] uppercase font-bold text-slate-400 block print-muted-text">Institución Bancaria</span>
-                            <span class="font-bold text-white text-sm print-dark-text" x-text="datosEstadoCuenta ? datosEstadoCuenta.cuenta.banco : ''"></span>
-                        </div>
-                        <div>
-                            <span class="text-[10px] uppercase font-bold text-slate-400 block print-muted-text">Nombre de la Cuenta</span>
-                            <span class="font-bold text-white print-dark-text" x-text="datosEstadoCuenta ? datosEstadoCuenta.cuenta.nombre : ''"></span>
-                        </div>
-                        <div>
-                            <span class="text-[10px] uppercase font-bold text-slate-400 block print-muted-text">No. Cuenta / CLABE</span>
-                            <span class="font-mono text-white print-dark-text" x-text="(datosEstadoCuenta ? datosEstadoCuenta.cuenta.numero_cuenta : '') + ' / ' + (datosEstadoCuenta ? datosEstadoCuenta.cuenta.clabe : '')"></span>
-                        </div>
-                        <div>
-                            <span class="text-[10px] uppercase font-bold text-slate-400 block print-muted-text">Moneda</span>
-                            <span class="font-bold text-emerald-400 font-mono print-dark-text" x-text="(datosEstadoCuenta ? datosEstadoCuenta.cuenta.moneda : 'MXN') + ' - Pesos Mexicanos'"></span>
+                            <!-- LADO DERECHO: LOGO OFICIAL DEL BANCO Y DATOS DE CUENTA -->
+                            <div class="flex items-center space-x-3 self-end md:self-auto">
+                                <div class="text-left md:text-right">
+                                    <span class="text-[10px] uppercase font-bold text-slate-400 block print-muted-text">Institución Bancaria</span>
+                                    <span class="font-black text-white text-sm print-dark-text" x-text="datosEstadoCuenta ? datosEstadoCuenta.cuenta.banco : ''"></span>
+                                    <div class="text-[10px] font-mono text-slate-300 print-dark-text" x-text="'Cta: ' + (datosEstadoCuenta ? datosEstadoCuenta.cuenta.numero_cuenta : '')"></div>
+                                    <div class="text-[10px] font-mono text-slate-400 print-muted-text" x-text="'CLABE: ' + (datosEstadoCuenta ? datosEstadoCuenta.cuenta.clabe : '')"></div>
+                                </div>
+                                <!-- Logo Banco -->
+                                <div class="h-12 w-24 rounded-xl flex items-center justify-center p-1.5 shrink-0 shadow-md overflow-hidden print-card"
+                                     :style="datosEstadoCuenta ? ('background:' + getBankStyle(datosEstadoCuenta.cuenta.banco, datosEstadoCuenta.cuenta.logo_banco).bg + '; border: 1px solid ' + getBankStyle(datosEstadoCuenta.cuenta.banco, datosEstadoCuenta.cuenta.logo_banco).border) : ''">
+                                    <template x-if="datosEstadoCuenta && datosEstadoCuenta.cuenta.logo_banco && datosEstadoCuenta.cuenta.logo_banco.startsWith('data:image')">
+                                        <img :src="datosEstadoCuenta.cuenta.logo_banco" class="max-h-full max-w-full object-contain">
+                                    </template>
+                                    <template x-if="datosEstadoCuenta && (!datosEstadoCuenta.cuenta.logo_banco || !datosEstadoCuenta.cuenta.logo_banco.startsWith('data:image'))">
+                                        <span class="text-xs font-black tracking-wider text-center" :style="'color:' + getBankStyle(datosEstadoCuenta.cuenta.banco, datosEstadoCuenta.cuenta.logo_banco).text" x-text="getBankStyle(datosEstadoCuenta.cuenta.banco, datosEstadoCuenta.cuenta.logo_banco).name"></span>
+                                    </template>
+                                </div>
+                            </div>
+
                         </div>
                     </div>
 
@@ -673,28 +746,28 @@
                         <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5 print-dark-text">Resumen del Periodo</h3>
                         <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
                             <!-- Saldo Inicial -->
-                            <div class="bg-slate-900/90 border border-slate-800 p-3.5 rounded-xl print-card">
+                            <div class="bg-slate-900/90 border border-slate-800 p-3 rounded-xl print-card">
                                 <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wide block print-muted-text">Saldo Inicial al 1° del Mes</span>
                                 <div class="text-base font-black font-mono text-white mt-1 print-dark-text" x-text="datosEstadoCuenta ? formatMoney(datosEstadoCuenta.resumen.saldo_inicial) : '$0.00'"></div>
                                 <span class="text-[10px] text-slate-500 mt-0.5 block print-muted-text">Corte del mes anterior</span>
                             </div>
 
                             <!-- Total Depósitos (Abonos) -->
-                            <div class="bg-slate-900/90 border border-emerald-900/40 p-3.5 rounded-xl print-card">
+                            <div class="bg-slate-900/90 border border-emerald-900/40 p-3 rounded-xl print-card">
                                 <span class="text-[10px] font-semibold text-emerald-400 uppercase tracking-wide block print-dark-text">(+) Total Depósitos / Abonos</span>
                                 <div class="text-base font-black font-mono text-emerald-400 mt-1 print-dark-text" x-text="datosEstadoCuenta ? formatMoney(datosEstadoCuenta.resumen.total_entradas) : '$0.00'"></div>
                                 <span class="text-[10px] text-slate-500 mt-0.5 block print-muted-text" x-text="(datosEstadoCuenta ? datosEstadoCuenta.resumen.conteo_entradas : 0) + ' movimiento(s)'"></span>
                             </div>
 
                             <!-- Total Retiros (Cargos) -->
-                            <div class="bg-slate-900/90 border border-rose-900/40 p-3.5 rounded-xl print-card">
+                            <div class="bg-slate-900/90 border border-rose-900/40 p-3 rounded-xl print-card">
                                 <span class="text-[10px] font-semibold text-rose-400 uppercase tracking-wide block print-dark-text">(-) Total Retiros / Cargos</span>
                                 <div class="text-base font-black font-mono text-rose-400 mt-1 print-dark-text" x-text="datosEstadoCuenta ? formatMoney(datosEstadoCuenta.resumen.total_salidas) : '$0.00'"></div>
                                 <span class="text-[10px] text-slate-500 mt-0.5 block print-muted-text" x-text="(datosEstadoCuenta ? datosEstadoCuenta.resumen.conteo_salidas : 0) + ' movimiento(s)'"></span>
                             </div>
 
                             <!-- Saldo Final al Corte -->
-                            <div class="bg-slate-900/90 border border-slate-800 p-3.5 rounded-xl print-card">
+                            <div class="bg-slate-900/90 border border-slate-800 p-3 rounded-xl print-card">
                                 <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wide block print-muted-text">(=) Saldo Final al Corte</span>
                                 <div class="text-base font-black font-mono mt-1 print-dark-text" :class="datosEstadoCuenta && datosEstadoCuenta.resumen.saldo_final >= 0 ? 'text-emerald-400' : 'text-rose-400'" x-text="datosEstadoCuenta ? formatMoney(datosEstadoCuenta.resumen.saldo_final) : '$0.00'"></div>
                                 <span class="text-[10px] text-slate-500 mt-0.5 block print-muted-text" x-text="'Al último día del mes'"></span>
@@ -712,35 +785,51 @@
                         </div>
 
                         <div class="overflow-x-auto border border-slate-800 rounded-xl print-card">
-                            <table class="w-full text-left text-xs print-table">
+                            <table class="w-full text-left text-xs print-table border-collapse" style="table-layout: fixed; width: 100%;">
+                                <colgroup>
+                                    <col style="width: 9.5%;">
+                                    <col style="width: 34%;">
+                                    <col style="width: 15%;">
+                                    <col style="width: 15%;">
+                                    <col style="width: 8.5%;">
+                                    <col style="width: 8.5%;">
+                                    <col style="width: 9.5%;">
+                                </colgroup>
                                 <thead class="bg-slate-900 text-slate-400 uppercase font-semibold text-[10px]">
                                     <tr>
-                                        <th class="p-2.5 text-center">Fecha</th>
-                                        <th class="p-2.5">Concepto / Detalle</th>
-                                        <th class="p-2.5">Categoría Fiscal</th>
-                                        <th class="p-2.5">Cliente / Proveedor</th>
-                                        <th class="p-2.5 text-right text-emerald-400 print-dark-text">Depósito (+)</th>
-                                        <th class="p-2.5 text-right text-rose-400 print-dark-text">Retiro (-)</th>
-                                        <th class="p-2.5 text-right">Saldo Resultante</th>
+                                        <th class="p-2 text-center" style="width: 9.5%;">Fecha</th>
+                                        <th class="p-2" style="width: 34%;">Concepto / Detalle</th>
+                                        <th class="p-2" style="width: 15%;">Categoría Fiscal</th>
+                                        <th class="p-2" style="width: 15%;">Cliente / Proveedor</th>
+                                        <th class="p-2 text-right text-emerald-400 print-badge-abono" style="width: 8.5%;">Depósito (+)</th>
+                                        <th class="p-2 text-right text-rose-400 print-badge-cargo" style="width: 8.5%;">Retiro (-)</th>
+                                        <th class="p-2 text-right" style="width: 9.5%;">Saldo</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-slate-800/80">
                                     <template x-for="m in (datosEstadoCuenta ? datosEstadoCuenta.movimientos : [])" :key="m.id">
                                         <tr class="hover:bg-slate-900/50">
-                                            <td class="p-2.5 font-mono text-center text-slate-400 print-dark-text whitespace-nowrap" x-text="m.fecha"></td>
-                                            <td class="p-2.5 font-medium text-white print-dark-text max-w-sm">
-                                                <div x-text="m.concepto"></div>
-                                                <div x-show="m.referencia" class="text-[10px] font-mono text-slate-500 print-muted-text" x-text="'Ref: ' + m.referencia"></div>
+                                            <td class="p-2 font-mono text-center text-slate-400 print-dark-text whitespace-nowrap text-[11px]" x-text="m.fecha"></td>
+                                            <td class="p-2 font-medium text-white print-dark-text break-words">
+                                                <div class="text-xs" x-text="m.concepto"></div>
+                                                <div x-show="m.referencia" class="text-[10px] font-mono text-slate-500 print-muted-text mt-0.5" x-text="'Ref: ' + m.referencia"></div>
                                             </td>
-                                            <td class="p-2.5">
-                                                <span class="px-2 py-0.5 rounded text-[10px] bg-slate-900 text-slate-300 border border-slate-700/80 whitespace-nowrap print-card" x-text="m.categoria_nombre"></span>
+                                            <td class="p-2 break-words">
+                                                <span class="px-1.5 py-0.5 rounded text-[10px] bg-slate-900 text-slate-300 border border-slate-700/80 inline-block print-card leading-tight" x-text="m.categoria_nombre"></span>
                                             </td>
-                                            <td class="p-2.5 text-emerald-400 print-dark-text" x-text="m.entidad_nombre || '-'"></td>
-                                            <td class="p-2.5 text-right font-mono font-bold text-emerald-400 print-dark-text" x-text="m.abono ? ('+' + formatMoney(m.abono)) : '-'"></td>
-                                            <td class="p-2.5 text-right font-mono font-bold text-rose-400 print-dark-text" x-text="m.cargo ? ('-' + formatMoney(m.cargo)) : '-'"></td>
-                                            <td class="p-2.5 text-right font-mono font-bold text-white print-dark-text" x-text="formatMoney(m.saldo_resultante)"></td>
+                                            <td class="p-2 text-emerald-400 print-dark-text break-words text-xs font-semibold" x-text="m.entidad_nombre || '-'"></td>
+                                            <td class="p-2 text-right font-mono font-bold text-emerald-400 print-badge-abono text-xs whitespace-nowrap" x-text="m.abono ? ('+' + formatMoney(m.abono)) : '-'"></td>
+                                            <td class="p-2 text-right font-mono font-bold text-rose-400 print-badge-cargo text-xs whitespace-nowrap" x-text="m.cargo ? ('-' + formatMoney(m.cargo)) : '-'"></td>
+                                            <td class="p-2 text-right font-mono font-bold text-white print-dark-text text-xs whitespace-nowrap" x-text="formatMoney(m.saldo_resultante)"></td>
                                         </tr>
                                     </template>
+                                    <tr x-show="!datosEstadoCuenta || datosEstadoCuenta.movimientos.length === 0">
+                                        <td colspan="7" class="p-6 text-center text-slate-500">No se registraron movimientos bancarios en el mes seleccionado.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                                     <tr x-show="!datosEstadoCuenta || datosEstadoCuenta.movimientos.length === 0">
                                         <td colspan="7" class="p-6 text-center text-slate-500">No se registraron movimientos bancarios en el mes seleccionado.</td>
                                     </tr>
@@ -865,41 +954,129 @@
 
     <!-- MODAL: AGREGAR O MODIFICAR CUENTA BANCARIA -->
     <div x-show="openModalCuenta" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" x-cloak>
-        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-md w-full p-6 shadow-2xl" @click.away="openModalCuenta = false">
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-6 shadow-2xl overflow-y-auto max-h-[90vh]" @click.away="openModalCuenta = false">
             <h3 class="text-base font-bold text-white mb-1" x-text="cuentaEnEdicion ? '✏️ Modificar Cuenta Bancaria' : '🏦 Registrar Nueva Cuenta Bancaria'"></h3>
-            <p class="text-xs text-slate-400 mb-4">Ingresa o edita los datos bancarios y saldo inicial.</p>
+            <p class="text-xs text-slate-400 mb-4">Configura los datos fiscales de la empresa, institución bancaria y logotipos distintivos.</p>
 
-            <form @submit.prevent="guardarCuenta" class="space-y-3.5">
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-300 mb-1">Nombre Descriptivo *</label>
-                        <input type="text" x-model="cuentaForm.nombre" required placeholder="Ej. Fiscal Principal" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+            <form @submit.prevent="guardarCuenta" class="space-y-4">
+                
+                <!-- SECCIÓN 1: DATOS DE LA EMPRESA & LOGO -->
+                <div class="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-3">
+                    <span class="text-[11px] font-bold text-emerald-400 uppercase tracking-wider block">🏢 Empresa Titular de la Cuenta</span>
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-300 mb-1">Nombre / Razón Social *</label>
+                            <input type="text" x-model="cuentaForm.nombre" required placeholder="Ej. HYMA AGROINDUSTRIAL" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-300 mb-1">RFC de la Empresa</label>
+                            <input type="text" x-model="cuentaForm.rfc_empresa" maxlength="15" placeholder="Ej. HAG161013U20" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono uppercase">
+                        </div>
                     </div>
+
+                    <!-- Logotipo de la Empresa -->
                     <div>
-                        <label class="block text-xs font-semibold text-slate-300 mb-1">Banco *</label>
-                        <input type="text" x-model="cuentaForm.banco" required placeholder="Ej. BBVA / Banorte" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                        <label class="block text-[11px] font-semibold text-slate-300 mb-1">Logotipo de la Empresa</label>
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 rounded-xl bg-slate-900 border border-slate-700 p-1 flex items-center justify-center shrink-0 overflow-hidden shadow-inner">
+                                <template x-if="cuentaForm.logo_empresa">
+                                    <img :src="cuentaForm.logo_empresa" class="w-full h-full object-contain">
+                                </template>
+                                <template x-if="!cuentaForm.logo_empresa && config.logo_url">
+                                    <img :src="config.logo_url" class="w-full h-full object-contain opacity-50">
+                                </template>
+                                <template x-if="!cuentaForm.logo_empresa && !config.logo_url">
+                                    <span class="text-xs text-slate-500 font-bold">Sin logo</span>
+                                </template>
+                            </div>
+                            <div class="flex-1 space-y-1">
+                                <input type="file" accept="image/*" @change="subirLogoEmpresa($event)" class="w-full text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-emerald-400 hover:file:bg-slate-700 cursor-pointer">
+                                <div class="text-[10px] text-slate-500">Formato PNG, JPG o WEBP. Si se deja vacío, usará el logo general.</div>
+                            </div>
+                            <button type="button" x-show="cuentaForm.logo_empresa" @click="cuentaForm.logo_empresa = null" class="text-xs text-rose-400 hover:underline">Quitar</button>
+                        </div>
                     </div>
                 </div>
 
-                <div>
-                    <label class="block text-xs font-semibold text-slate-300 mb-1">CLABE Interbancaria (18 dígitos) *</label>
-                    <input type="text" x-model="cuentaForm.clabe" maxlength="18" minlength="18" required placeholder="012180001234567890" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono">
+                <!-- SECCIÓN 2: INSTITUCIÓN BANCARIA & LOGO -->
+                <div class="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-3">
+                    <span class="text-[11px] font-bold text-sky-400 uppercase tracking-wider block">🏛️ Institución Bancaria</span>
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-300 mb-1">Banco Oficial *</label>
+                            <input list="listaBancosModal" type="text" x-model="cuentaForm.banco" @change="seleccionarBancoPreset(cuentaForm.banco)" required placeholder="Ej. Banorte / Scotiabank / BBVA" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                            <datalist id="listaBancosModal">
+                                <option value="Banorte"></option>
+                                <option value="Scotiabank"></option>
+                                <option value="BBVA"></option>
+                                <option value="Santander"></option>
+                                <option value="Citibanamex"></option>
+                                <option value="HSBC"></option>
+                                <option value="Banco Azteca"></option>
+                                <option value="BanBajío"></option>
+                                <option value="Banregio"></option>
+                                <option value="Inbursa"></option>
+                                <option value="Afirme"></option>
+                            </datalist>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-300 mb-1">Estilo / Preset de Logo</label>
+                            <select x-model="cuentaForm.logo_banco" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                                <option value="banorte">🔴 Banorte (Oficial)</option>
+                                <option value="scotiabank">🔴 Scotiabank (Oficial)</option>
+                                <option value="bbva">🔵 BBVA (Oficial)</option>
+                                <option value="santander">🔴 Santander (Oficial)</option>
+                                <option value="citibanamex">🔵 Citibanamex (Oficial)</option>
+                                <option value="hsbc">🔴 HSBC (Oficial)</option>
+                                <option value="azteca">🟢 Banco Azteca (Oficial)</option>
+                                <option value="bajio">🔵 BanBajío (Oficial)</option>
+                                <option value="personalizado">📁 Subir Logo Propio...</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Previsualización / Subida de logo de banco -->
+                    <div class="flex items-center gap-3">
+                        <div class="w-28 h-9 rounded-xl flex items-center justify-center p-1.5 shrink-0 shadow-inner overflow-hidden"
+                             :style="'background:' + getBankStyle(cuentaForm.banco, cuentaForm.logo_banco).bg + '; border: 1px solid ' + getBankStyle(cuentaForm.banco, cuentaForm.logo_banco).border">
+                            <template x-if="cuentaForm.logo_banco && cuentaForm.logo_banco.startsWith('data:image')">
+                                <img :src="cuentaForm.logo_banco" class="h-full object-contain">
+                            </template>
+                            <template x-if="!cuentaForm.logo_banco || !cuentaForm.logo_banco.startsWith('data:image')">
+                                <span class="text-xs font-black tracking-wider text-center" :style="'color:' + getBankStyle(cuentaForm.banco, cuentaForm.logo_banco).text" x-text="getBankStyle(cuentaForm.banco, cuentaForm.logo_banco).name"></span>
+                            </template>
+                        </div>
+                        <div class="flex-1 space-y-1">
+                            <input type="file" accept="image/*" @change="subirLogoBanco($event)" class="w-full text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-sky-400 hover:file:bg-slate-700 cursor-pointer">
+                            <div class="text-[10px] text-slate-500">Opcional: Subir imagen PNG si prefieres logo propio.</div>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-3">
+                <!-- SECCIÓN 3: DATOS BANCARIOS & SALDO -->
+                <div class="space-y-3">
                     <div>
-                        <label class="block text-xs font-semibold text-slate-300 mb-1">Número de Cuenta *</label>
-                        <input type="text" x-model="cuentaForm.numero_cuenta" required placeholder="0123456789" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono">
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">CLABE Interbancaria (18 dígitos) *</label>
+                        <input type="text" x-model="cuentaForm.clabe" maxlength="18" minlength="18" required placeholder="012180001234567890" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono">
                     </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-300 mb-1">Saldo Inicial ($)</label>
-                        <input type="number" step="0.01" x-model="cuentaForm.saldo_inicial" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono">
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Número de Cuenta *</label>
+                            <input type="text" x-model="cuentaForm.numero_cuenta" required placeholder="0123456789" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Saldo Inicial ($)</label>
+                            <input type="number" step="0.01" x-model="cuentaForm.saldo_inicial" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono">
+                        </div>
                     </div>
                 </div>
 
                 <div class="flex justify-end space-x-2 pt-3 border-t border-slate-800">
                     <button type="button" @click="openModalCuenta = false" class="px-4 py-2 text-xs text-slate-400 hover:text-white">Cancelar</button>
-                    <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-xl" x-text="cuentaEnEdicion ? 'Actualizar Datos' : 'Guardar Cuenta'"></button>
+                    <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-xl" x-text="cuentaEnEdicion ? 'Actualizar Cuenta y Logos' : 'Guardar Cuenta'"></button>
                 </div>
             </form>
         </div>
@@ -1332,7 +1509,10 @@
                 cuentaForm: {
                     id: null,
                     nombre: '',
+                    rfc_empresa: 'HAG161013U20',
+                    logo_empresa: null,
                     banco: '',
+                    logo_banco: 'banorte',
                     clabe: '',
                     numero_cuenta: '',
                     saldo_inicial: 0.0,
@@ -1685,7 +1865,10 @@
                     this.cuentaForm = {
                         id: null,
                         nombre: '',
-                        banco: '',
+                        rfc_empresa: 'HAG161013U20',
+                        logo_empresa: null,
+                        banco: 'Banorte',
+                        logo_banco: 'banorte',
                         clabe: '',
                         numero_cuenta: '',
                         saldo_inicial: 0.0,
@@ -1699,13 +1882,80 @@
                     this.cuentaForm = {
                         id: cta.id,
                         nombre: cta.nombre,
+                        rfc_empresa: cta.rfc_empresa || 'HAG161013U20',
+                        logo_empresa: cta.logo_empresa || null,
                         banco: cta.banco,
+                        logo_banco: cta.logo_banco || 'banorte',
                         clabe: cta.clabe,
                         numero_cuenta: cta.numero_cuenta,
                         saldo_inicial: parseFloat(cta.saldo_inicial),
                         moneda: cta.moneda
                     };
                     this.openModalCuenta = true;
+                },
+
+                getBankStyle(banco, logoBanco) {
+                    const l = (logoBanco || '').toLowerCase();
+                    const b = (banco || '').toLowerCase();
+                    
+                    if (l === 'banorte' || b.includes('banorte')) {
+                        return { name: 'BANORTE', bg: '#EB0029', text: '#FFFFFF', border: '#C00021' };
+                    }
+                    if (l === 'scotiabank' || b.includes('scotia')) {
+                        return { name: 'Scotiabank', bg: '#EC111A', text: '#FFFFFF', border: '#B80D14' };
+                    }
+                    if (l === 'bbva' || b.includes('bbva')) {
+                        return { name: 'BBVA', bg: '#004481', text: '#FFFFFF', border: '#003366' };
+                    }
+                    if (l === 'santander' || b.includes('santander')) {
+                        return { name: 'Santander', bg: '#EC0000', text: '#FFFFFF', border: '#B50000' };
+                    }
+                    if (l === 'citibanamex' || b.includes('banamex') || b.includes('citi')) {
+                        return { name: 'citibanamex', bg: '#002D72', text: '#FFFFFF', border: '#001D4A' };
+                    }
+                    if (l === 'hsbc' || b.includes('hsbc')) {
+                        return { name: 'HSBC', bg: '#DB0011', text: '#FFFFFF', border: '#9E000C' };
+                    }
+                    if (l === 'azteca' || b.includes('azteca')) {
+                        return { name: 'Banco Azteca', bg: '#006341', text: '#FFFFFF', border: '#004830' };
+                    }
+                    if (l === 'bajio' || b.includes('bajio') || b.includes('bajío')) {
+                        return { name: 'BanBajío', bg: '#003865', text: '#FFFFFF', border: '#002442' };
+                    }
+                    return { name: banco || 'BANCO', bg: '#1E293B', text: '#38BDF8', border: '#334155' };
+                },
+
+                seleccionarBancoPreset(banco) {
+                    if (!banco) return;
+                    const b = banco.toLowerCase();
+                    if (b.includes('banorte')) this.cuentaForm.logo_banco = 'banorte';
+                    else if (b.includes('scotia')) this.cuentaForm.logo_banco = 'scotiabank';
+                    else if (b.includes('bbva')) this.cuentaForm.logo_banco = 'bbva';
+                    else if (b.includes('santander')) this.cuentaForm.logo_banco = 'santander';
+                    else if (b.includes('banamex') || b.includes('citi')) this.cuentaForm.logo_banco = 'citibanamex';
+                    else if (b.includes('hsbc')) this.cuentaForm.logo_banco = 'hsbc';
+                    else if (b.includes('azteca')) this.cuentaForm.logo_banco = 'azteca';
+                    else if (b.includes('bajio') || b.includes('bajío')) this.cuentaForm.logo_banco = 'bajio';
+                },
+
+                subirLogoEmpresa(e) {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        this.cuentaForm.logo_empresa = event.target.result;
+                    };
+                    reader.readAsDataURL(file);
+                },
+
+                subirLogoBanco(e) {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        this.cuentaForm.logo_banco = event.target.result;
+                    };
+                    reader.readAsDataURL(file);
                 },
 
                 async guardarCuenta() {

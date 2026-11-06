@@ -25,7 +25,10 @@ class Cuenta(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String(100), nullable=False)
+    rfc_empresa = Column(String(15), nullable=True)
+    logo_empresa = Column(Text, nullable=True)
     banco = Column(String(80), nullable=False)
+    logo_banco = Column(Text, nullable=True)
     clabe = Column(String(18), unique=True, nullable=False, index=True)
     numero_cuenta = Column(String(25), unique=True, nullable=False, index=True)
     saldo_inicial = Column(Numeric(15, 2), default=0.00, nullable=False)

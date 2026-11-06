@@ -46,7 +46,10 @@ class AuthResponse(BaseModel):
 # --- CUENTAS ---
 class CuentaBase(BaseModel):
     nombre: str = Field(..., max_length=100, examples=["Fiscal Principal"])
+    rfc_empresa: Optional[str] = Field(None, max_length=15, examples=["HAG161013U20"])
+    logo_empresa: Optional[str] = None
     banco: str = Field(..., max_length=80, examples=["BBVA Bancomer"])
+    logo_banco: Optional[str] = None
     clabe: str = Field(..., min_length=18, max_length=18, examples=["012180001234567890"])
     numero_cuenta: str = Field(..., max_length=25, examples=["0123456789"])
     saldo_inicial: Decimal = Field(default=Decimal("0.00"), ge=0)
@@ -65,7 +68,10 @@ class CuentaCreate(CuentaBase):
 
 class CuentaUpdate(BaseModel):
     nombre: Optional[str] = Field(None, max_length=100)
+    rfc_empresa: Optional[str] = Field(None, max_length=15)
+    logo_empresa: Optional[str] = None
     banco: Optional[str] = Field(None, max_length=80)
+    logo_banco: Optional[str] = None
     clabe: Optional[str] = Field(None, min_length=18, max_length=18)
     numero_cuenta: Optional[str] = Field(None, max_length=25)
     saldo_inicial: Optional[Decimal] = None
