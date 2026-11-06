@@ -1515,11 +1515,14 @@
                 },
 
                 get entidadesFiltradas() {
+                    if (!this.entidades || this.entidades.length === 0) return [];
                     const catActual = this.categorias.find(c => c.id == this.form.categoria_id);
-                    if (!catActual || catActual.tipo_entidad_sugerida === 'GENERAL') {
+                    if (!catActual || !catActual.tipo_entidad_sugerida || catActual.tipo_entidad_sugerida === 'GENERAL') {
                         return this.entidades;
                     }
-                    return this.entidades.filter(e => e.tipo_entidad === catActual.tipo_entidad_sugerida);
+                    const sugeridos = this.entidades.filter(e => e.tipo_entidad === catActual.tipo_entidad_sugerida);
+                    const otros = this.entidades.filter(e => e.tipo_entidad !== catActual.tipo_entidad_sugerida);
+                    return [...sugeridos, ...otros];
                 },
 
                 get categoriasCatalogoFiltradas() {
