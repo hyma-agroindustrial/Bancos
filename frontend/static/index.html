@@ -1641,6 +1641,13 @@
                         });
                         if (res.ok) {
                             this.movimientosExtraidos = await res.json();
+                            if (this.movimientosExtraidos.length === 0) {
+                                alert('⚠️ No se detectaron movimientos en el estado de cuenta.\n\nVerifica que el archivo contenga texto seleccionable.');
+                            } else {
+                                const nuevos = this.movimientosExtraidos.filter(m => !m.es_duplicado).length;
+                                const duplicados = this.movimientosExtraidos.filter(m => m.es_duplicado).length;
+                                alert(`✅ ¡Extracción completada!\n\nSe extrajeron ${this.movimientosExtraidos.length} movimientos (${nuevos} nuevos, ${duplicados} ya registrados previamente).\n\nRevisa la tabla abajo y presiona "Confirmar e Importar".`);
+                            }
                         } else {
                             const err = await res.json();
                             alert(err.detail || 'Error al procesar el archivo PDF');

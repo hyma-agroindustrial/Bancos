@@ -639,10 +639,19 @@ async def extraer_movimientos_pdf(
     sat_cat = next((c.id for c in cats if "IMPUESTO" in c.nombre.upper() or "SAT" in c.nombre.upper()), None)
     cfe_cat = next((c.id for c in cats if "LUZ" in c.nombre.upper() or "CFE" in c.nombre.upper()), None)
     tel_cat = next((c.id for c in cats if "TEL" in c.nombre.upper() or "INTERNET" in c.nombre.upper()), None)
+    com_cat = next((c.id for c in cats if "COMISION" in c.nombre.upper()), None)
+    cred_cat = next((c.id for c in cats if "CREDITO" in c.nombre.upper() or "AUTOMOTRIZ" in c.nombre.upper()), None)
+    hon_cat = next((c.id for c in cats if "HONORARIO" in c.nombre.upper()), None)
+    trasp_cat = next((c.id for c in cats if "TRASPASO" in c.nombre.upper()), None)
+    refac_cat = next((c.id for c in cats if "ACCESORIO" in c.nombre.upper() or "REFACCION" in c.nombre.upper()), None)
 
     for m in movimientos:
         conc = m["concepto"].upper()
-        if any(w in conc for w in ["GASOL", "COMBUSTIBLE", "HIDROCARB", "OXXO GAS", "PEMEX"]):
+        if any(w in conc for w in ["GM FINANCIAL", "CHEYENNE", "AUTOMOTRIZ", "ARRENDAMIENTO FINANCIERO"]):
+            m["categoria_id_sugerida"] = cred_cat
+        elif any(w in conc for w in ["HONORARIOS", "CONTABLES", "VALENZUELA EDEZA", "EDEZA"]):
+            m["categoria_id_sugerida"] = hon_cat
+        elif any(w in conc for w in ["GASOL", "COMBUSTIBLE", "HIDROCARB", "OXXO GAS", "PEMEX"]):
             m["categoria_id_sugerida"] = gas_cat
         elif any(w in conc for w in ["CFE", "COMISION FEDERAL", "LUZ"]):
             m["categoria_id_sugerida"] = cfe_cat
@@ -650,6 +659,12 @@ async def extraer_movimientos_pdf(
             m["categoria_id_sugerida"] = tel_cat
         elif any(w in conc for w in ["SAT", "IMPUESTO", "TESORERIA", "IMSS"]):
             m["categoria_id_sugerida"] = sat_cat
+        elif any(w in conc for w in ["COMISION", "MEMBRESIA", "ORDEN DE PAGO SPEI", "TRANSFERENCIA - ENVIO"]):
+            m["categoria_id_sugerida"] = com_cat
+        elif any(w in conc for w in ["TRASPASO", "SCOTIA", "SCOTIABANK"]):
+            m["categoria_id_sugerida"] = trasp_cat
+        elif any(w in conc for w in ["TOYOTA", "CAM TOYOTA", "REFACCION"]):
+            m["categoria_id_sugerida"] = refac_cat
         elif m["tipo"] == "ENTRADA":
             m["categoria_id_sugerida"] = cli_cat
 
