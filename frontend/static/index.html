@@ -121,6 +121,12 @@
                     <span class="hidden sm:inline">Nueva Cuenta</span>
                 </button>
 
+                <!-- Botón Catálogos (Categorías & Clientes/Proveedores) -->
+                <button @click="abrirModalCatalogos()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 p-2 sm:px-2.5 sm:py-2 rounded-lg font-medium transition flex items-center gap-1" title="Ver y corregir catálogo de categorías y clientes/proveedores">
+                    <span>🏷️</span>
+                    <span class="hidden sm:inline">Catálogos</span>
+                </button>
+
                 <!-- Badge Usuario Actual & Logout -->
                 <div class="flex items-center pl-2 border-l border-slate-800 space-x-2" x-show="usuarioActual">
                     <span class="text-xs font-semibold px-2 py-1 rounded-md bg-emerald-950 text-emerald-400 border border-emerald-800/80 hidden lg:inline" x-text="usuarioActual ? usuarioActual.nombre : ''"></span>
@@ -232,13 +238,18 @@
 
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         
-                        <!-- Categoría Dinámica con Opción de Agregar al Vuelo -->
+                        <!-- Categoría Dinámica con Opción de Agregar al Vuelo y Corregir -->
                         <div>
                             <div class="flex justify-between items-center mb-1">
                                 <label class="text-xs font-semibold text-slate-300">Categoría Fiscal *</label>
-                                <button type="button" @click="abrirModalCrearCategoria()" class="text-[11px] text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-0.5">
-                                    <span>➕</span> <span>Nueva</span>
-                                </button>
+                                <div class="flex items-center space-x-2">
+                                    <button type="button" x-show="form.categoria_id" @click="abrirModalEditarCategoria()" class="text-[11px] text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-0.5" title="Corregir ortografía o datos de esta categoría">
+                                        <span>✏️</span> <span>Corregir</span>
+                                    </button>
+                                    <button type="button" @click="abrirModalCrearCategoria()" class="text-[11px] text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-0.5">
+                                        <span>➕</span> <span>Nueva</span>
+                                    </button>
+                                </div>
                             </div>
                             
                             <select x-model="form.categoria_id" @change="onCategoriaChange()" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500">
@@ -249,13 +260,18 @@
                             </select>
                         </div>
 
-                        <!-- Input Condicional: Cliente / Gasolinera / Proveedor -->
+                        <!-- Input Condicional: Cliente / Gasolinera / Proveedor con Corregir -->
                         <div>
                             <div class="flex justify-between items-center mb-1">
                                 <label class="text-xs font-semibold text-slate-300" x-text="labelEntidadDinamica"></label>
-                                <button type="button" @click="abrirModalCrearEntidad()" class="text-[11px] text-emerald-400 hover:text-emerald-300 font-semibold">
-                                    ➕ Agregar al vuelo
-                                </button>
+                                <div class="flex items-center space-x-2">
+                                    <button type="button" x-show="form.entidad_id" @click="abrirModalEditarEntidad()" class="text-[11px] text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-0.5" title="Corregir nombre o datos de este cliente/proveedor">
+                                        <span>✏️</span> <span>Corregir</span>
+                                    </button>
+                                    <button type="button" @click="abrirModalCrearEntidad()" class="text-[11px] text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-0.5">
+                                        <span>➕</span> <span>Agregar al vuelo</span>
+                                    </button>
+                                </div>
                             </div>
 
                             <select x-model="form.entidad_id" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500">
@@ -795,6 +811,171 @@
         </div>
     </div>
 
+    <!-- MODAL: EDITAR / CORREGIR CATEGORÍA -->
+    <div x-show="openModalEditarCategoria" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" x-cloak>
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4" @click.away="openModalEditarCategoria = false">
+            <div class="flex justify-between items-center">
+                <h3 class="text-base font-bold text-white">✏️ Corregir Categoría Fiscal</h3>
+                <button @click="openModalEditarCategoria = false" class="text-slate-400 hover:text-white text-sm">✕</button>
+            </div>
+            <p class="text-xs text-slate-400">Corrige el nombre si hubo una falta de ortografía. Los cambios se actualizarán en todos los registros.</p>
+
+            <form @submit.prevent="guardarEdicionCategoria" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Nombre de la Categoría *</label>
+                    <input type="text" x-model="categoriaEnEdicion.nombre" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                </div>
+
+                <div class="grid grid-cols-2 gap-2.5">
+                    <div>
+                        <label class="block text-[11px] text-slate-400 mb-0.5">Tipo</label>
+                        <select x-model="categoriaEnEdicion.tipo" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white">
+                            <option value="SALIDA">Salida (Gasto)</option>
+                            <option value="ENTRADA">Entrada (Ingreso)</option>
+                            <option value="AMBOS">Ambos</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] text-slate-400 mb-0.5">Tipo de Tercero</label>
+                        <select x-model="categoriaEnEdicion.tipo_entidad_sugerida" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white">
+                            <option value="PROVEEDOR">Proveedor</option>
+                            <option value="CLIENTE">Cliente</option>
+                            <option value="GASOLINERA">Gasolinera</option>
+                            <option value="EMPLEADO">Empleado</option>
+                            <option value="GENERAL">General / Ninguno</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="flex justify-between items-center pt-3 border-t border-slate-800">
+                    <button type="button" @click="eliminarCategoria(categoriaEnEdicion)" class="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1">
+                        <span>🗑️</span> <span>Eliminar</span>
+                    </button>
+                    <div class="flex space-x-2">
+                        <button type="button" @click="openModalEditarCategoria = false" class="px-3 py-1.5 text-xs text-slate-400 hover:text-white">Cancelar</button>
+                        <button type="submit" :disabled="loading" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-3.5 py-1.5 rounded-xl">Guardar</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: EDITAR / CORREGIR ENTIDAD (CLIENTE / PROVEEDOR) -->
+    <div x-show="openModalEditarEntidad" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" x-cloak>
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4" @click.away="openModalEditarEntidad = false">
+            <div class="flex justify-between items-center">
+                <h3 class="text-base font-bold text-white">✏️ Corregir Cliente / Proveedor</h3>
+                <button @click="openModalEditarEntidad = false" class="text-slate-400 hover:text-white text-sm">✕</button>
+            </div>
+            <p class="text-xs text-slate-400">Corrige el nombre o RFC. Se actualizará en el autocompletado y en los reportes.</p>
+
+            <form @submit.prevent="guardarEdicionEntidad" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Nombre / Razón Social *</label>
+                    <input type="text" x-model="entidadEnEdicion.nombre" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Tipo de Tercero</label>
+                    <select x-model="entidadEnEdicion.tipo_entidad" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                        <option value="CLIENTE">Cliente</option>
+                        <option value="PROVEEDOR">Proveedor</option>
+                        <option value="GASOLINERA">Gasolinera</option>
+                        <option value="EMPLEADO">Empleado</option>
+                        <option value="GENERAL">General</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">RFC (Opcional)</label>
+                    <input type="text" x-model="entidadEnEdicion.rfc" maxlength="13" placeholder="XAXX010101000" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white uppercase font-mono">
+                </div>
+
+                <div class="flex justify-between items-center pt-3 border-t border-slate-800">
+                    <button type="button" @click="eliminarEntidad(entidadEnEdicion)" class="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1">
+                        <span>🗑️</span> <span>Eliminar</span>
+                    </button>
+                    <div class="flex space-x-2">
+                        <button type="button" @click="openModalEditarEntidad = false" class="px-3 py-1.5 text-xs text-slate-400 hover:text-white">Cancelar</button>
+                        <button type="submit" :disabled="loading" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-3.5 py-1.5 rounded-xl">Guardar</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: GESTIÓN COMPLETA DE CATÁLOGOS -->
+    <div x-show="openModalCatalogos" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" x-cloak>
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-4" @click.away="openModalCatalogos = false">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center space-x-2">
+                    <span class="text-lg">🏷️</span>
+                    <h3 class="text-base font-bold text-white">Catálogos del Sistema</h3>
+                </div>
+                <button @click="openModalCatalogos = false" class="text-slate-400 hover:text-white text-sm">✕</button>
+            </div>
+
+            <!-- Tabs de Catálogo -->
+            <div class="flex border-b border-slate-800 space-x-4">
+                <button @click="catalogoTab = 'categorias'" :class="catalogoTab === 'categorias' ? 'border-emerald-500 text-emerald-400 font-bold' : 'border-transparent text-slate-400 hover:text-slate-200'" class="pb-2 border-b-2 text-xs transition">
+                    Categorías Fiscales (<span x-text="categorias.length"></span>)
+                </button>
+                <button @click="catalogoTab = 'entidades'" :class="catalogoTab === 'entidades' ? 'border-emerald-500 text-emerald-400 font-bold' : 'border-transparent text-slate-400 hover:text-slate-200'" class="pb-2 border-b-2 text-xs transition">
+                    Clientes & Proveedores (<span x-text="entidades.length"></span>)
+                </button>
+            </div>
+
+            <!-- Buscador Rápido -->
+            <div>
+                <input type="text" x-model="filtroCatalogo" placeholder="🔍 Buscar por nombre..." class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+            </div>
+
+            <!-- Lista de Categorías -->
+            <div x-show="catalogoTab === 'categorias'" class="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                <template x-for="cat in categoriasCatalogoFiltradas" :key="cat.id">
+                    <div class="flex justify-between items-center p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs">
+                        <div>
+                            <span class="font-bold text-white" x-text="cat.nombre"></span>
+                            <span class="text-[10px] px-1.5 py-0.2 rounded ml-1.5 font-semibold" :class="cat.tipo === 'ENTRADA' ? 'bg-emerald-950 text-emerald-400' : (cat.tipo === 'SALIDA' ? 'bg-rose-950 text-rose-400' : 'bg-slate-800 text-slate-300')" x-text="cat.tipo"></span>
+                            <span class="text-[10px] text-slate-400 ml-1" x-text="'[' + cat.tipo_entidad_sugerida + ']'"></span>
+                        </div>
+                        <div class="flex items-center space-x-1.5">
+                            <button @click="abrirModalEditarCategoria(cat)" title="Editar categoría" class="p-1 bg-slate-900 hover:bg-slate-700 rounded text-slate-300 text-xs">✏️</button>
+                            <button @click="eliminarCategoria(cat)" title="Eliminar categoría" class="p-1 bg-slate-900 hover:bg-rose-950 rounded text-rose-400 text-xs">🗑️</button>
+                        </div>
+                    </div>
+                </template>
+                <div x-show="categoriasCatalogoFiltradas.length === 0" class="text-center py-4 text-xs text-slate-500">
+                    No se encontraron categorías.
+                </div>
+            </div>
+
+            <!-- Lista de Entidades (Clientes / Proveedores) -->
+            <div x-show="catalogoTab === 'entidades'" class="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                <template x-for="ent in entidadesCatalogoFiltradas" :key="ent.id">
+                    <div class="flex justify-between items-center p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs">
+                        <div>
+                            <span class="font-bold text-white" x-text="ent.nombre"></span>
+                            <span class="text-[10px] px-1.5 py-0.2 rounded ml-1.5 font-semibold bg-slate-800 text-slate-300" x-text="ent.tipo_entidad"></span>
+                            <span x-show="ent.rfc" class="text-[10px] font-mono text-slate-400 ml-1" x-text="'RFC: ' + ent.rfc"></span>
+                        </div>
+                        <div class="flex items-center space-x-1.5">
+                            <button @click="abrirModalEditarEntidad(ent)" title="Editar" class="p-1 bg-slate-900 hover:bg-slate-700 rounded text-slate-300 text-xs">✏️</button>
+                            <button @click="eliminarEntidad(ent)" title="Eliminar" class="p-1 bg-slate-900 hover:bg-rose-950 rounded text-rose-400 text-xs">🗑️</button>
+                        </div>
+                    </div>
+                </template>
+                <div x-show="entidadesCatalogoFiltradas.length === 0" class="text-center py-4 text-xs text-slate-500">
+                    No se encontraron clientes o proveedores.
+                </div>
+            </div>
+
+            <div class="flex justify-end pt-3 border-t border-slate-800">
+                <button type="button" @click="openModalCatalogos = false" class="bg-slate-800 hover:bg-slate-700 text-white text-xs px-4 py-2 rounded-xl">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
     <!-- LOGICA ALPINE JS -->
     <script>
         function agroApp() {
@@ -832,7 +1013,14 @@
                 openModalCategoria: false,
                 openModalConfiguracion: false,
                 openModalEditarTransaccion: false,
+                openModalEditarCategoria: false,
+                openModalEditarEntidad: false,
+                openModalCatalogos: false,
+                catalogoTab: 'categorias',
+                filtroCatalogo: '',
                 cuentaEnEdicion: null,
+                categoriaEnEdicion: { id: null, nombre: '', tipo: 'SALIDA', tipo_entidad_sugerida: 'GENERAL', descripcion: '' },
+                entidadEnEdicion: { id: null, nombre: '', tipo_entidad: 'PROVEEDOR', rfc: '' },
                 editarTransForm: {
                     id: null,
                     cuenta_id: '',
@@ -1063,6 +1251,18 @@
                     return this.entidades.filter(e => e.tipo_entidad === catActual.tipo_entidad_sugerida);
                 },
 
+                get categoriasCatalogoFiltradas() {
+                    if (!this.filtroCatalogo.trim()) return this.categorias;
+                    const f = this.filtroCatalogo.toLowerCase();
+                    return this.categorias.filter(c => c.nombre.toLowerCase().includes(f));
+                },
+
+                get entidadesCatalogoFiltradas() {
+                    if (!this.filtroCatalogo.trim()) return this.entidades;
+                    const f = this.filtroCatalogo.toLowerCase();
+                    return this.entidades.filter(e => e.nombre.toLowerCase().includes(f) || (e.rfc && e.rfc.toLowerCase().includes(f)));
+                },
+
                 onTipoChange() {
                     this.form.categoria_id = '';
                     this.form.entidad_id = '';
@@ -1123,6 +1323,86 @@
                     } else {
                         const err = await res.json();
                         alert(err.detail || 'Error al guardar categoría');
+                    }
+                },
+
+                abrirModalCatalogos() {
+                    this.filtroCatalogo = '';
+                    this.catalogoTab = 'categorias';
+                    this.openModalCatalogos = true;
+                },
+
+                abrirModalEditarCategoria(cat = null) {
+                    let c = cat;
+                    if (!c) {
+                        c = this.categorias.find(item => item.id == this.form.categoria_id);
+                    }
+                    if (!c) return;
+                    this.categoriaEnEdicion = {
+                        id: c.id,
+                        nombre: c.nombre,
+                        tipo: c.tipo,
+                        tipo_entidad_sugerida: c.tipo_entidad_sugerida || 'GENERAL',
+                        descripcion: c.descripcion || ''
+                    };
+                    this.openModalEditarCategoria = true;
+                },
+
+                async guardarEdicionCategoria() {
+                    this.loading = true;
+                    try {
+                        const payload = {
+                            nombre: this.categoriaEnEdicion.nombre.trim(),
+                            tipo: this.categoriaEnEdicion.tipo,
+                            tipo_entidad_sugerida: this.categoriaEnEdicion.tipo_entidad_sugerida,
+                            descripcion: this.categoriaEnEdicion.descripcion || null
+                        };
+                        const res = await fetch(`/api/categorias/${this.categoriaEnEdicion.id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        if (res.ok) {
+                            const updated = await res.json();
+                            await this.cargarCategorias();
+                            if (this.form.categoria_id == updated.id) {
+                                this.onCategoriaChange();
+                            }
+                            await this.filtrarTransacciones();
+                            this.openModalEditarCategoria = false;
+                            alert('✅ Categoría corregida y actualizada con éxito.');
+                        } else {
+                            const err = await res.json();
+                            alert(err.detail || 'Error al guardar cambios de la categoría');
+                        }
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async eliminarCategoria(cat) {
+                    if (!cat || !cat.id) return;
+                    if (!confirm(`¿Eliminar la categoría "${cat.nombre}"?\n\nLos movimientos ya registrados conservarán sus datos y quedarán como "Sin Asignar".`)) {
+                        return;
+                    }
+                    this.loading = true;
+                    try {
+                        const res = await fetch(`/api/categorias/${cat.id}`, { method: 'DELETE' });
+                        if (res.ok) {
+                            if (this.form.categoria_id == cat.id) {
+                                this.form.categoria_id = '';
+                                this.onCategoriaChange();
+                            }
+                            await this.cargarCategorias();
+                            await this.filtrarTransacciones();
+                            this.openModalEditarCategoria = false;
+                            alert('✅ Categoría eliminada.');
+                        } else {
+                            const err = await res.json();
+                            alert(err.detail || 'Error al eliminar');
+                        }
+                    } finally {
+                        this.loading = false;
                     }
                 },
 
@@ -1229,6 +1509,73 @@
                         await this.cargarEntidades();
                         this.form.entidad_id = nueva.id;
                         this.openModalEntidad = false;
+                    }
+                },
+
+                abrirModalEditarEntidad(ent = null) {
+                    let e = ent;
+                    if (!e) {
+                        e = this.entidades.find(item => item.id == this.form.entidad_id);
+                    }
+                    if (!e) return;
+                    this.entidadEnEdicion = {
+                        id: e.id,
+                        nombre: e.nombre,
+                        tipo_entidad: e.tipo_entidad,
+                        rfc: e.rfc || ''
+                    };
+                    this.openModalEditarEntidad = true;
+                },
+
+                async guardarEdicionEntidad() {
+                    this.loading = true;
+                    try {
+                        const payload = {
+                            nombre: this.entidadEnEdicion.nombre.trim(),
+                            tipo_entidad: this.entidadEnEdicion.tipo_entidad,
+                            rfc: this.entidadEnEdicion.rfc ? this.entidadEnEdicion.rfc.trim().toUpperCase() : null
+                        };
+                        const res = await fetch(`/api/entidades/${this.entidadEnEdicion.id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        if (res.ok) {
+                            await this.cargarEntidades();
+                            await this.filtrarTransacciones();
+                            this.openModalEditarEntidad = false;
+                            alert('✅ Cliente / Proveedor corregido y actualizado.');
+                        } else {
+                            const err = await res.json();
+                            alert(err.detail || 'Error al actualizar');
+                        }
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async eliminarEntidad(ent) {
+                    if (!ent || !ent.id) return;
+                    if (!confirm(`¿Eliminar "${ent.nombre}" de la lista?\n\nLos movimientos conservarán su registro sin cliente/proveedor asociado.`)) {
+                        return;
+                    }
+                    this.loading = true;
+                    try {
+                        const res = await fetch(`/api/entidades/${ent.id}`, { method: 'DELETE' });
+                        if (res.ok) {
+                            if (this.form.entidad_id == ent.id) {
+                                this.form.entidad_id = '';
+                            }
+                            await this.cargarEntidades();
+                            await this.filtrarTransacciones();
+                            this.openModalEditarEntidad = false;
+                            alert('✅ Eliminado con éxito.');
+                        } else {
+                            const err = await res.json();
+                            alert(err.detail || 'Error al eliminar');
+                        }
+                    } finally {
+                        this.loading = false;
                     }
                 },
 

@@ -102,6 +102,12 @@ class CategoriaBase(BaseModel):
 class CategoriaCreate(CategoriaBase):
     pass
 
+class CategoriaUpdate(BaseModel):
+    nombre: Optional[str] = Field(None, max_length=100)
+    tipo: Optional[str] = Field(None, pattern="^(ENTRADA|SALIDA|AMBOS)$")
+    tipo_entidad_sugerida: Optional[str] = None
+    descripcion: Optional[str] = None
+
 class CategoriaResponse(CategoriaBase):
     id: int
     activo: bool
@@ -119,6 +125,13 @@ class EntidadBase(BaseModel):
 
 class EntidadCreate(EntidadBase):
     pass
+
+class EntidadUpdate(BaseModel):
+    nombre: Optional[str] = Field(None, max_length=150)
+    tipo_entidad: Optional[str] = Field(None, examples=["CLIENTE", "GASOLINERA", "PROVEEDOR", "EMPLEADO", "SAT", "GENERAL"])
+    rfc: Optional[str] = Field(None, max_length=13)
+    telefono: Optional[str] = None
+    email: Optional[str] = None
 
 class EntidadResponse(EntidadBase):
     id: int

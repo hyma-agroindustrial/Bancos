@@ -15,8 +15,8 @@ from .database import engine, Base, get_db
 from .models import Cuenta, Categoria, Entidad, Transaccion, Usuario, Configuracion
 from .schemas import (
     CuentaCreate, CuentaUpdate, CuentaResponse,
-    CategoriaCreate, CategoriaResponse,
-    EntidadCreate, EntidadResponse,
+    CategoriaCreate, CategoriaUpdate, CategoriaResponse,
+    EntidadCreate, EntidadUpdate, EntidadResponse,
     TransaccionCreate, TransaccionUpdate, TransaccionResponse,
     MovimientoExtraido, BatchImportConfirm,
     UsuarioLogin, UsuarioCreate, UsuarioResponse, AuthResponse,
@@ -371,6 +371,46 @@ def crear_categoria(cat: CategoriaCreate, db: Session = Depends(get_db)):
     db.refresh(nueva)
     return nueva
 
+@app.put("/api/categorias/{categoria_id}", response_model=CategoriaResponse)
+def modificar_categoria(categoria_id: int, datos: CategoriaUpdate, db: Session = Depends(get_db)):
+    """Permite corregir el nombre u opciones de una categoría existente."""
+    cat = db.query(Categoria).filter(Categoria.id == categoria_id).first()
+    if not cat:
+        raise HTTPException(status_code=404, detail="Categoría no encontrada.")
+
+    if datos.nombre is not None:
+        nombre_limpio = datos.nombre.strip()
+        duplicado = db.query(Categoria).filter(
+            func.lower(Categoria.nombre) == func.lower(nombre_limpio),
+            Categoria.id != categoria_id
+        ).first()
+        if duplicado:
+            raise HTTPException(status_code=400, detail=f"Ya existe otra categoría con el nombre '{nombre_limpio}'.")
+        cat.nombre = nombre_limpio
+
+    if datos.tipo is not None:
+        cat.tipo = datos.tipo
+    if datos.tipo_entidad_sugerida is not None:
+        cat.tipo_entidad_sugerida = datos.tipo_entidad_sugerida
+    if datos.descripcion is not None:
+        cat.descripcion = datos.descripcion
+
+    db.commit()
+    db.refresh(cat)
+    return cat
+
+@app.delete("/api/categorias/{categoria_id}")
+def eliminar_categoria(categoria_id: int, db: Session = Depends(get_db)):
+    """Elimina una categoría desvinculándola de movimientos existentes."""
+    cat = db.query(Categoria).filter(Categoria.id == categoria_id).first()
+    if not cat:
+        raise HTTPException(status_code=404, detail="Categoría no encontrada.")
+
+    db.query(Transaccion).filter(Transaccion.categoria_id == categoria_id).update({Transaccion.categoria_id: None})
+    db.delete(cat)
+    db.commit()
+    return {"message": f"Categoría '{cat.nombre}' eliminada con éxito."}
+
 @app.get("/api/entidades", response_model=List[EntidadResponse])
 def listar_entidades(tipo_entidad: Optional[str] = None, db: Session = Depends(get_db)):
     query = db.query(Entidad).filter(Entidad.activo == True)
@@ -380,18 +420,70 @@ def listar_entidades(tipo_entidad: Optional[str] = None, db: Session = Depends(g
 
 @app.post("/api/entidades", response_model=EntidadResponse)
 def crear_entidad_al_vuelo(entidad: EntidadCreate, db: Session = Depends(get_db)):
+    nombre_limpio = entidad.nombre.strip()
     existente = db.query(Entidad).filter(
-        Entidad.nombre == entidad.nombre,
+        func.lower(Entidad.nombre) == func.lower(nombre_limpio),
         Entidad.tipo_entidad == entidad.tipo_entidad
     ).first()
     if existente:
         return existente
-    
-    nueva = Entidad(**entidad.model_dump())
+
+    nueva = Entidad(
+        nombre=nombre_limpio,
+        tipo_entidad=entidad.tipo_entidad,
+        rfc=entidad.rfc.strip().upper() if entidad.rfc else None,
+        telefono=entidad.telefono,
+        email=entidad.email,
+        activo=True
+    )
     db.add(nueva)
     db.commit()
     db.refresh(nueva)
     return nueva
+
+@app.put("/api/entidades/{entidad_id}", response_model=EntidadResponse)
+def modificar_entidad(entidad_id: int, datos: EntidadUpdate, db: Session = Depends(get_db)):
+    """Permite corregir el nombre, tipo o RFC de un cliente o proveedor."""
+    ent = db.query(Entidad).filter(Entidad.id == entidad_id).first()
+    if not ent:
+        raise HTTPException(status_code=404, detail="Entidad no encontrada.")
+
+    if datos.nombre is not None:
+        nombre_limpio = datos.nombre.strip()
+        tipo_final = datos.tipo_entidad if datos.tipo_entidad is not None else ent.tipo_entidad
+        duplicado = db.query(Entidad).filter(
+            func.lower(Entidad.nombre) == func.lower(nombre_limpio),
+            Entidad.tipo_entidad == tipo_final,
+            Entidad.id != entidad_id
+        ).first()
+        if duplicado:
+            raise HTTPException(status_code=400, detail=f"Ya existe un registro con el nombre '{nombre_limpio}' para este tipo.")
+        ent.nombre = nombre_limpio
+
+    if datos.tipo_entidad is not None:
+        ent.tipo_entidad = datos.tipo_entidad
+    if datos.rfc is not None:
+        ent.rfc = datos.rfc.strip().upper() if datos.rfc else None
+    if datos.telefono is not None:
+        ent.telefono = datos.telefono.strip() if datos.telefono else None
+    if datos.email is not None:
+        ent.email = datos.email.strip() if datos.email else None
+
+    db.commit()
+    db.refresh(ent)
+    return ent
+
+@app.delete("/api/entidades/{entidad_id}")
+def eliminar_entidad(entidad_id: int, db: Session = Depends(get_db)):
+    """Elimina un cliente/proveedor desvinculándolo de movimientos existentes."""
+    ent = db.query(Entidad).filter(Entidad.id == entidad_id).first()
+    if not ent:
+        raise HTTPException(status_code=404, detail="Entidad no encontrada.")
+
+    db.query(Transaccion).filter(Transaccion.entidad_id == entidad_id).update({Transaccion.entidad_id: None})
+    db.delete(ent)
+    db.commit()
+    return {"message": f"Entidad '{ent.nombre}' eliminada con éxito."}
 
 
 # ====================================================================================================
