@@ -154,6 +154,26 @@ class TransaccionCreate(TransaccionBase):
     archivo_fuente: Optional[str] = None
     hash_deduplicacion: Optional[str] = None
 
+class TransaccionUpdate(BaseModel):
+    cuenta_id: Optional[int] = None
+    categoria_id: Optional[int] = None
+    entidad_id: Optional[int] = None
+    fecha: Optional[date] = None
+    tipo: Optional[str] = Field(None, pattern="^(ENTRADA|SALIDA)$")
+    monto: Optional[Decimal] = Field(None, gt=0)
+    concepto: Optional[str] = None
+    referencia: Optional[str] = None
+
+    @field_validator("categoria_id", "entidad_id", "cuenta_id", mode="before")
+    @classmethod
+    def parse_optional_id(cls, v: Any) -> Optional[int]:
+        if v == "" or v is None or v == "null":
+            return None
+        try:
+            return int(v)
+        except (ValueError, TypeError):
+            return None
+
 class TransaccionResponse(TransaccionBase):
     id: int
     origen: str

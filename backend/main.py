@@ -17,7 +17,7 @@ from .schemas import (
     CuentaCreate, CuentaUpdate, CuentaResponse,
     CategoriaCreate, CategoriaResponse,
     EntidadCreate, EntidadResponse,
-    TransaccionCreate, TransaccionResponse,
+    TransaccionCreate, TransaccionUpdate, TransaccionResponse,
     MovimientoExtraido, BatchImportConfirm,
     UsuarioLogin, UsuarioCreate, UsuarioResponse, AuthResponse,
     ConfiguracionData
@@ -455,6 +455,62 @@ def crear_transaccion_manual(trans: TransaccionCreate, db: Session = Depends(get
     tr_dict.categoria_nombre = nueva.categoria.nombre if nueva.categoria else None
     tr_dict.entidad_nombre = nueva.entidad.nombre if nueva.entidad else None
     return tr_dict
+
+@app.put("/api/transacciones/{transaccion_id}", response_model=TransaccionResponse)
+def modificar_transaccion(transaccion_id: int, datos: TransaccionUpdate, db: Session = Depends(get_db)):
+    """Permite modificar fecha, monto, concepto, categoría, cuenta o beneficiario de un movimiento existente."""
+    t = db.query(Transaccion).filter(Transaccion.id == transaccion_id).first()
+    if not t:
+        raise HTTPException(status_code=404, detail="Movimiento no encontrado.")
+
+    if datos.cuenta_id is not None:
+        cta = db.query(Cuenta).filter(Cuenta.id == datos.cuenta_id).first()
+        if not cta:
+            raise HTTPException(status_code=404, detail="Cuenta bancaria no válida.")
+        t.cuenta_id = datos.cuenta_id
+
+    # Manejar actualización de categoría y entidad (incluyendo si se desasigna)
+    if datos.categoria_id is not None:
+        t.categoria_id = datos.categoria_id
+    elif "categoria_id" in datos.model_fields_set:
+        t.categoria_id = None
+
+    if datos.entidad_id is not None:
+        t.entidad_id = datos.entidad_id
+    elif "entidad_id" in datos.model_fields_set:
+        t.entidad_id = None
+
+    if datos.fecha is not None:
+        t.fecha = datos.fecha
+    if datos.tipo is not None:
+        t.tipo = datos.tipo
+    if datos.monto is not None:
+        t.monto = datos.monto
+    if datos.concepto is not None:
+        t.concepto = datos.concepto.strip()
+    if datos.referencia is not None:
+        t.referencia = datos.referencia.strip()
+
+    db.commit()
+    db.refresh(t)
+
+    tr_dict = TransaccionResponse.model_validate(t)
+    tr_dict.cuenta_nombre = t.cuenta.nombre if t.cuenta else None
+    tr_dict.cuenta_banco = t.cuenta.banco if t.cuenta else None
+    tr_dict.cuenta_numero = t.cuenta.numero_cuenta if t.cuenta else None
+    tr_dict.categoria_nombre = t.categoria.nombre if t.categoria else None
+    tr_dict.entidad_nombre = t.entidad.nombre if t.entidad else None
+    return tr_dict
+
+@app.delete("/api/transacciones/{transaccion_id}")
+def eliminar_transaccion(transaccion_id: int, db: Session = Depends(get_db)):
+    """Elimina permanentemente una transacción de la base de datos."""
+    t = db.query(Transaccion).filter(Transaccion.id == transaccion_id).first()
+    if not t:
+        raise HTTPException(status_code=404, detail="Movimiento no encontrado.")
+    db.delete(t)
+    db.commit()
+    return {"message": "Movimiento eliminado exitosamente."}
 
 
 # ====================================================================================================

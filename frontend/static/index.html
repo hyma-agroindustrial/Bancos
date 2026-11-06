@@ -453,6 +453,7 @@
                                 <th class="p-3">Categoría</th>
                                 <th class="p-3">Cliente / Proveedor</th>
                                 <th class="p-3 text-right">Monto</th>
+                                <th class="p-3 text-center">Acciones</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-800/80">
@@ -472,10 +473,20 @@
                                     </td>
                                     <td class="p-3 text-emerald-400 font-medium" x-text="t.entidad_nombre || '-'"></td>
                                     <td class="p-3 text-right font-mono font-bold" :class="t.tipo === 'ENTRADA' ? 'text-emerald-400' : 'text-rose-400'" x-text="(t.tipo === 'ENTRADA' ? '+' : '-') + ' ' + formatMoney(t.monto)"></td>
+                                    <td class="p-3 text-center">
+                                        <div class="flex items-center justify-center space-x-1.5">
+                                            <button @click="abrirModalEditarTransaccion(t)" title="Modificar Movimiento" class="p-1.5 text-slate-400 hover:text-white bg-slate-900 hover:bg-slate-700 rounded-lg text-xs transition">
+                                                ✏️
+                                            </button>
+                                            <button @click="eliminarTransaccion(t)" title="Eliminar Movimiento" class="p-1.5 text-slate-400 hover:text-rose-400 bg-slate-900 hover:bg-rose-950 rounded-lg text-xs transition">
+                                                🗑️
+                                            </button>
+                                        </div>
+                                    </td>
                                 </tr>
                             </template>
                             <tr x-show="transacciones.length === 0">
-                                <td colspan="6" class="p-6 text-center text-slate-500">No se encontraron movimientos con los filtros aplicados.</td>
+                                <td colspan="7" class="p-6 text-center text-slate-500">No se encontraron movimientos con los filtros aplicados.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -702,6 +713,88 @@
         </div>
     </div>
 
+    <!-- MODAL: MODIFICAR MOVIMIENTO / TRANSACCIÓN -->
+    <div x-show="openModalEditarTransaccion" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" x-cloak>
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4" @click.away="openModalEditarTransaccion = false">
+            <div class="flex justify-between items-center">
+                <h3 class="text-base font-bold text-white">✏️ Modificar Movimiento</h3>
+                <button @click="openModalEditarTransaccion = false" class="text-slate-400 hover:text-white text-sm">✕</button>
+            </div>
+            
+            <p class="text-xs text-slate-400">Edita los datos del movimiento. El saldo de las cuentas se recalculará automáticamente.</p>
+
+            <form @submit.prevent="guardarEdicionTransaccion" class="space-y-3.5">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Cuenta Bancaria *</label>
+                        <select x-model="editarTransForm.cuenta_id" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                            <template x-for="cta in cuentas" :key="cta.id">
+                                <option :value="cta.id" x-text="formatCuentaLabel(cta)"></option>
+                            </template>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Tipo de Movimiento *</label>
+                        <select x-model="editarTransForm.tipo" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-bold" :class="editarTransForm.tipo === 'ENTRADA' ? 'text-emerald-400' : 'text-rose-400'">
+                            <option value="SALIDA">📤 Salida (Gasto)</option>
+                            <option value="ENTRADA">📥 Entrada (Abono)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Fecha de Operación *</label>
+                        <input type="date" x-model="editarTransForm.fecha" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Monto ($ MXN) *</label>
+                        <input type="number" step="0.01" min="0.01" x-model="editarTransForm.monto" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-mono font-bold">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Categoría Fiscal</label>
+                        <select x-model="editarTransForm.categoria_id" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                            <option value="">(Sin Categoría)</option>
+                            <template x-for="cat in categorias" :key="cat.id">
+                                <option :value="cat.id" x-text="cat.nombre"></option>
+                            </template>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Beneficiario / Proveedor / Cliente</label>
+                        <select x-model="editarTransForm.entidad_id" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                            <option value="">(Ninguno / Opcional)</option>
+                            <template x-for="ent in entidades" :key="ent.id">
+                                <option :value="ent.id" x-text="ent.nombre"></option>
+                            </template>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Concepto o Detalle *</label>
+                    <input type="text" x-model="editarTransForm.concepto" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Referencia o Folio SPEI (Opcional)</label>
+                    <input type="text" x-model="editarTransForm.referencia" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono">
+                </div>
+
+                <div class="flex justify-end space-x-2 pt-3 border-t border-slate-800">
+                    <button type="button" @click="openModalEditarTransaccion = false" class="px-4 py-2 text-xs text-slate-400 hover:text-white">Cancelar</button>
+                    <button type="submit" :disabled="loading" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-xl">Guardar Cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- LOGICA ALPINE JS -->
     <script>
         function agroApp() {
@@ -738,7 +831,19 @@
                 openModalUsuarios: false,
                 openModalCategoria: false,
                 openModalConfiguracion: false,
+                openModalEditarTransaccion: false,
                 cuentaEnEdicion: null,
+                editarTransForm: {
+                    id: null,
+                    cuenta_id: '',
+                    tipo: 'SALIDA',
+                    monto: '',
+                    fecha: '',
+                    concepto: '',
+                    referencia: '',
+                    categoria_id: '',
+                    entidad_id: ''
+                },
                 labelEntidadDinamica: 'Cliente / Proveedor',
                 labelModalEntidad: 'Entidad',
                 
@@ -1240,6 +1345,87 @@
 
                     if (resTr.ok) this.transacciones = await resTr.json();
                     if (resRep.ok) this.resumenReporte = await resRep.json();
+                },
+
+                abrirModalEditarTransaccion(t) {
+                    this.editarTransForm = {
+                        id: t.id,
+                        cuenta_id: t.cuenta_id,
+                        tipo: t.tipo,
+                        monto: t.monto,
+                        fecha: t.fecha,
+                        concepto: t.concepto,
+                        referencia: t.referencia || '',
+                        categoria_id: t.categoria_id ? t.categoria_id.toString() : '',
+                        entidad_id: t.entidad_id ? t.entidad_id.toString() : ''
+                    };
+                    this.openModalEditarTransaccion = true;
+                },
+
+                async guardarEdicionTransaccion() {
+                    this.loading = true;
+                    try {
+                        const payload = {
+                            cuenta_id: parseInt(this.editarTransForm.cuenta_id),
+                            categoria_id: this.editarTransForm.categoria_id ? parseInt(this.editarTransForm.categoria_id) : null,
+                            entidad_id: this.editarTransForm.entidad_id ? parseInt(this.editarTransForm.entidad_id) : null,
+                            fecha: this.editarTransForm.fecha,
+                            tipo: this.editarTransForm.tipo,
+                            monto: parseFloat(this.editarTransForm.monto),
+                            concepto: this.editarTransForm.concepto,
+                            referencia: this.editarTransForm.referencia || null
+                        };
+
+                        const res = await fetch(`/api/transacciones/${this.editarTransForm.id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+
+                        if (res.ok) {
+                            this.openModalEditarTransaccion = false;
+                            alert('✅ Movimiento actualizado correctamente.');
+                            await this.cargarCuentas();
+                            await this.filtrarTransacciones();
+                        } else {
+                            const err = await res.json();
+                            let msg = 'Error al actualizar movimiento.';
+                            if (typeof err.detail === 'string') {
+                                msg = err.detail;
+                            } else if (Array.isArray(err.detail)) {
+                                msg = err.detail.map(d => d.msg || JSON.stringify(d)).join('\n');
+                            } else if (err.detail && typeof err.detail === 'object') {
+                                msg = JSON.stringify(err.detail);
+                            }
+                            alert(msg);
+                        }
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async eliminarTransaccion(t) {
+                    const formattedMonto = this.formatMoney(t.monto);
+                    const signo = t.tipo === 'SALIDA' ? '-' : '+';
+                    if (!confirm(`¿Estás seguro de eliminar este movimiento?\n\nFecha: ${t.fecha}\nConcepto: ${t.concepto}\nMonto: ${signo}${formattedMonto}\n\nLos saldos de la cuenta bancaria se recalcularán automáticamente.`)) {
+                        return;
+                    }
+                    this.loading = true;
+                    try {
+                        const res = await fetch(`/api/transacciones/${t.id}`, {
+                            method: 'DELETE'
+                        });
+                        if (res.ok) {
+                            alert('✅ Movimiento eliminado exitosamente.');
+                            await this.cargarCuentas();
+                            await this.filtrarTransacciones();
+                        } else {
+                            const err = await res.json();
+                            alert(err.detail || 'Error al eliminar el movimiento.');
+                        }
+                    } finally {
+                        this.loading = false;
+                    }
                 },
 
                 formatMoney(amount) {
