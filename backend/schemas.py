@@ -3,6 +3,40 @@ from typing import Optional, List
 from datetime import date, datetime
 from decimal import Decimal
 
+# --- USUARIOS & PIN AUTH ---
+class UsuarioLogin(BaseModel):
+    username: str = Field(..., max_length=50)
+    pin: str = Field(..., min_length=4, max_length=8)
+
+class UsuarioCreate(BaseModel):
+    username: str = Field(..., max_length=50)
+    nombre: str = Field(..., max_length=100)
+    pin: str = Field(..., min_length=4, max_length=8)
+    rol: Optional[str] = Field(default="OPERADOR", pattern="^(ADMIN|OPERADOR)$")
+
+    @field_validator("pin")
+    @classmethod
+    def validar_pin(cls, v: str) -> str:
+        v = v.strip()
+        if not v.isdigit():
+            raise ValueError("El PIN debe contener únicamente dígitos numéricos (ej. 1234).")
+        return v
+
+class UsuarioResponse(BaseModel):
+    id: int
+    username: str
+    nombre: str
+    rol: str
+    activo: bool
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class AuthResponse(BaseModel):
+    token: str
+    usuario: UsuarioResponse
+
 # --- CUENTAS ---
 class CuentaBase(BaseModel):
     nombre: str = Field(..., max_length=100, examples=["Fiscal Principal"])
@@ -22,6 +56,24 @@ class CuentaBase(BaseModel):
 
 class CuentaCreate(CuentaBase):
     pass
+
+class CuentaUpdate(BaseModel):
+    nombre: Optional[str] = Field(None, max_length=100)
+    banco: Optional[str] = Field(None, max_length=80)
+    clabe: Optional[str] = Field(None, min_length=18, max_length=18)
+    numero_cuenta: Optional[str] = Field(None, max_length=25)
+    saldo_inicial: Optional[Decimal] = None
+    moneda: Optional[str] = Field(None, max_length=5)
+    activo: Optional[bool] = None
+
+    @field_validator("clabe")
+    @classmethod
+    def validar_clabe_opcional(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            v = v.strip()
+            if not v.isdigit() or len(v) != 18:
+                raise ValueError("La CLABE interbancaria debe tener exactamente 18 dígitos numéricos.")
+        return v
 
 class CuentaResponse(CuentaBase):
     id: int
@@ -103,8 +155,8 @@ class MovimientoExtraido(BaseModel):
     fecha: date
     concepto: str
     referencia: Optional[str] = None
-    cargo: Optional[Decimal] = None # Salida
-    abono: Optional[Decimal] = None  # Entrada
+    cargo: Optional[Decimal] = None
+    abono: Optional[Decimal] = None
     tipo: str
     monto: Decimal
     saldo_resultante: Optional[Decimal] = None
@@ -117,4 +169,3 @@ class BatchImportConfirm(BaseModel):
     cuenta_id: int
     archivo_nombre: str
     movimientos: List[MovimientoExtraido]
-

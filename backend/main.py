@@ -1,5 +1,7 @@
 import os
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Query
+import hashlib
+import secrets
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Query, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -10,13 +12,14 @@ from datetime import date
 from decimal import Decimal
 
 from .database import engine, Base, get_db
-from .models import Cuenta, Categoria, Entidad, Transaccion
+from .models import Cuenta, Categoria, Entidad, Transaccion, Usuario
 from .schemas import (
-    CuentaCreate, CuentaResponse,
+    CuentaCreate, CuentaUpdate, CuentaResponse,
     CategoriaCreate, CategoriaResponse,
     EntidadCreate, EntidadResponse,
     TransaccionCreate, TransaccionResponse,
-    MovimientoExtraido, BatchImportConfirm
+    MovimientoExtraido, BatchImportConfirm,
+    UsuarioLogin, UsuarioCreate, UsuarioResponse, AuthResponse
 )
 from .parsers.bank_pdf_parser import extract_movements_from_pdf
 
@@ -25,8 +28,8 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Hyma Agroindustrial - Control Fiscal & Gastos",
-    version="1.0.0",
-    description="Sistema contable automatizado con ingesta de estados de cuenta PDF y clasificación dinámica."
+    version="1.1.0",
+    description="Sistema contable automatizado con control de usuarios por PIN, ingesta de estados de cuenta PDF y conciliación de cuentas fiscales."
 )
 
 app.add_middleware(
@@ -37,13 +40,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+def hash_pin(pin: str) -> str:
+    """Cifra el PIN de 4-8 dígitos con salteado criptográfico."""
+    return hashlib.sha256(f"hyma_bancos_salt_{pin}".encode("utf-8")).hexdigest()
+
 # SEED DATA AL INICIO
 @app.on_event("startup")
-def startup_seed_categories():
+def startup_seed_data():
     db = next(get_db())
     try:
-        count = db.query(Categoria).count()
-        if count == 0:
+        # 1. Seed Usuario Administrador por defecto
+        if db.query(Usuario).count() == 0:
+            admin_user = Usuario(
+                username="admin",
+                nombre="Administrador General",
+                pin_hash=hash_pin("1234"),
+                rol="ADMIN",
+                activo=True
+            )
+            db.add(admin_user)
+            db.commit()
+
+        # 2. Seed Categorías iniciales
+        if db.query(Categoria).count() == 0:
             default_cats = [
                 Categoria(nombre="Depósito Cliente", tipo="ENTRADA", tipo_entidad_sugerida="CLIENTE", descripcion="Cobranza de cosechas y productos agrícolas"),
                 Categoria(nombre="Pago Gasolina", tipo="SALIDA", tipo_entidad_sugerida="GASOLINERA", descripcion="Combustible tractores, maquinaria y transporte"),
@@ -55,7 +74,7 @@ def startup_seed_categories():
             db.add_all(default_cats)
             db.commit()
 
-        # Seed cuenta demo si no existe ninguna
+        # 3. Seed cuenta demo si no existe ninguna
         if db.query(Cuenta).count() == 0:
             demo_acc = Cuenta(
                 nombre="Fiscal Principal",
@@ -73,7 +92,70 @@ def startup_seed_categories():
 
 
 # ====================================================================================================
-# 1. GESTIÓN DE CUENTAS BANCARIAS
+# 0. CONTROL DE ACCESO (USUARIO + PIN) PARA ACCESO DESDE CUALQUIER DISPOSITIVO
+# ====================================================================================================
+@app.post("/api/auth/login", response_model=AuthResponse)
+def login_usuario(payload: UsuarioLogin, db: Session = Depends(get_db)):
+    user = db.query(Usuario).filter(Usuario.username == payload.username.strip(), Usuario.activo == True).first()
+    if not user or user.pin_hash != hash_pin(payload.pin.strip()):
+        raise HTTPException(status_code=401, detail="Usuario o PIN incorrecto.")
+
+    # Generar token de sesión persistente para celular / tablet
+    token = secrets.token_hex(24)
+    user.token_sesion = token
+    db.commit()
+
+    return {
+        "token": token,
+        "usuario": UsuarioResponse.model_validate(user)
+    }
+
+@app.get("/api/auth/verify")
+def verificar_sesion(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="No autorizado.")
+    token = authorization.replace("Bearer ", "").strip()
+    user = db.query(Usuario).filter(Usuario.token_sesion == token, Usuario.activo == True).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="Sesión inválida o expirada.")
+    return UsuarioResponse.model_validate(user)
+
+@app.get("/api/usuarios", response_model=List[UsuarioResponse])
+def listar_usuarios(db: Session = Depends(get_db)):
+    return db.query(Usuario).filter(Usuario.activo == True).order_by(Usuario.id).all()
+
+@app.post("/api/usuarios", response_model=UsuarioResponse)
+def crear_usuario(payload: UsuarioCreate, db: Session = Depends(get_db)):
+    existente = db.query(Usuario).filter(Usuario.username == payload.username.strip()).first()
+    if existente:
+        raise HTTPException(status_code=400, detail="Este nombre de usuario ya existe.")
+
+    nuevo = Usuario(
+        username=payload.username.strip(),
+        nombre=payload.nombre.strip(),
+        pin_hash=hash_pin(payload.pin.strip()),
+        rol=payload.rol or "OPERADOR",
+        activo=True
+    )
+    db.add(nuevo)
+    db.commit()
+    db.refresh(nuevo)
+    return nuevo
+
+@app.delete("/api/usuarios/{usuario_id}")
+def eliminar_usuario(usuario_id: int, db: Session = Depends(get_db)):
+    user = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+    if user.username == "admin":
+        raise HTTPException(status_code=400, detail="No se puede eliminar el usuario administrador principal.")
+    user.activo = False
+    db.commit()
+    return {"message": "Usuario desactivado con éxito."}
+
+
+# ====================================================================================================
+# 1. GESTIÓN DE CUENTAS BANCARIAS (MODIFICACIÓN Y ELIMINACIÓN)
 # ====================================================================================================
 @app.get("/api/cuentas", response_model=List[CuentaResponse])
 def listar_cuentas(db: Session = Depends(get_db)):
@@ -81,7 +163,6 @@ def listar_cuentas(db: Session = Depends(get_db)):
     resultado = []
     
     for c in cuentas:
-        # Calcular entradas y salidas
         entradas = db.query(func.coalesce(func.sum(Transaccion.monto), 0)).filter(
             Transaccion.cuenta_id == c.id, Transaccion.tipo == "ENTRADA"
         ).scalar()
@@ -102,7 +183,6 @@ def listar_cuentas(db: Session = Depends(get_db)):
 
 @app.post("/api/cuentas", response_model=CuentaResponse)
 def crear_cuenta(cuenta: CuentaCreate, db: Session = Depends(get_db)):
-    # Validar unicidad
     existente = db.query(Cuenta).filter(
         (Cuenta.clabe == cuenta.clabe) | (Cuenta.numero_cuenta == cuenta.numero_cuenta)
     ).first()
@@ -117,6 +197,66 @@ def crear_cuenta(cuenta: CuentaCreate, db: Session = Depends(get_db)):
     c_res = CuentaResponse.model_validate(nueva_cuenta)
     c_res.saldo_actual = nueva_cuenta.saldo_inicial
     return c_res
+
+@app.put("/api/cuentas/{cuenta_id}", response_model=CuentaResponse)
+def modificar_cuenta(cuenta_id: int, datos: CuentaUpdate, db: Session = Depends(get_db)):
+    """Permite modificar nombre, banco, CLABE, número de cuenta o saldo inicial."""
+    cuenta = db.query(Cuenta).filter(Cuenta.id == cuenta_id).first()
+    if not cuenta:
+        raise HTTPException(status_code=404, detail="Cuenta bancaria no encontrada.")
+
+    # Validar que si cambia CLABE o número de cuenta, no colisione con otra
+    if datos.clabe and datos.clabe != cuenta.clabe:
+        existe_clabe = db.query(Cuenta).filter(Cuenta.clabe == datos.clabe, Cuenta.id != cuenta_id).first()
+        if existe_clabe:
+            raise HTTPException(status_code=400, detail="La nueva CLABE ya pertenece a otra cuenta.")
+        cuenta.clabe = datos.clabe
+
+    if datos.numero_cuenta and datos.numero_cuenta != cuenta.numero_cuenta:
+        existe_num = db.query(Cuenta).filter(Cuenta.numero_cuenta == datos.numero_cuenta, Cuenta.id != cuenta_id).first()
+        if existe_num:
+            raise HTTPException(status_code=400, detail="El nuevo número de cuenta ya pertenece a otra cuenta.")
+        cuenta.numero_cuenta = datos.numero_cuenta
+
+    if datos.nombre is not None:
+        cuenta.nombre = datos.nombre.strip()
+    if datos.banco is not None:
+        cuenta.banco = datos.banco.strip()
+    if datos.saldo_inicial is not None:
+        cuenta.saldo_inicial = datos.saldo_inicial
+    if datos.moneda is not None:
+        cuenta.moneda = datos.moneda
+    if datos.activo is not None:
+        cuenta.activo = datos.activo
+
+    db.commit()
+    db.refresh(cuenta)
+
+    # Recalcular saldo
+    entradas = db.query(func.coalesce(func.sum(Transaccion.monto), 0)).filter(
+        Transaccion.cuenta_id == cuenta.id, Transaccion.tipo == "ENTRADA"
+    ).scalar()
+    salidas = db.query(func.coalesce(func.sum(Transaccion.monto), 0)).filter(
+        Transaccion.cuenta_id == cuenta.id, Transaccion.tipo == "SALIDA"
+    ).scalar()
+    
+    c_res = CuentaResponse.model_validate(cuenta)
+    c_res.total_entradas = Decimal(str(entradas))
+    c_res.total_salidas = Decimal(str(salidas))
+    c_res.saldo_actual = Decimal(str(cuenta.saldo_inicial)) + c_res.total_entradas - c_res.total_salidas
+    return c_res
+
+@app.delete("/api/cuentas/{cuenta_id}")
+def eliminar_cuenta(cuenta_id: int, db: Session = Depends(get_db)):
+    """Elimina o desactiva la cuenta bancaria para mantener integridad fiscal."""
+    cuenta = db.query(Cuenta).filter(Cuenta.id == cuenta_id).first()
+    if not cuenta:
+        raise HTTPException(status_code=404, detail="Cuenta no encontrada.")
+
+    # Marcar como inactiva (Soft-delete) para conservar historial fiscal de transacciones
+    cuenta.activo = False
+    db.commit()
+    return {"message": "Cuenta bancaria eliminada del catálogo activo con éxito."}
 
 
 # ====================================================================================================
@@ -149,13 +289,12 @@ def listar_entidades(tipo_entidad: Optional[str] = None, db: Session = Depends(g
 
 @app.post("/api/entidades", response_model=EntidadResponse)
 def crear_entidad_al_vuelo(entidad: EntidadCreate, db: Session = Depends(get_db)):
-    """Permite crear un cliente, proveedor o gasolinera 'al vuelo' desde los menús desplegables."""
     existente = db.query(Entidad).filter(
         Entidad.nombre == entidad.nombre,
         Entidad.tipo_entidad == entidad.tipo_entidad
     ).first()
     if existente:
-        return existente # Si ya existe, simplemente la retorna para selección automática
+        return existente
     
     nueva = Entidad(**entidad.model_dump())
     db.add(nueva)
@@ -175,7 +314,7 @@ def listar_transacciones(
     tipo: Optional[str] = None,
     fecha_inicio: Optional[date] = None,
     fecha_fin: Optional[date] = None,
-    limit: int = 100,
+    limit: int = 150,
     db: Session = Depends(get_db)
 ):
     query = db.query(Transaccion)
@@ -195,7 +334,6 @@ def listar_transacciones(
 
     transacciones = query.order_by(Transaccion.fecha.desc(), Transaccion.id.desc()).limit(limit).all()
 
-    # Formatear nombres relacionales
     resultado = []
     for t in transacciones:
         tr_dict = TransaccionResponse.model_validate(t)
@@ -233,10 +371,6 @@ async def extraer_movimientos_pdf(
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
-    """
-    Recibe el archivo PDF del estado de cuenta, extrae movimientos con pdfplumber y regex,
-    verifica duplicados contra la base de datos y sugiere categorías preliminares.
-    """
     cuenta = db.query(Cuenta).filter(Cuenta.id == cuenta_id).first()
     if not cuenta:
         raise HTTPException(status_code=404, detail="Cuenta bancaria especificada no existe.")
@@ -248,17 +382,14 @@ async def extraer_movimientos_pdf(
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="El archivo PDF está vacío.")
 
-    # Cargar hashes existentes de esta cuenta para deduplicación
     existing_hashes = set(
         h[0] for h in db.query(Transaccion.hash_deduplicacion).filter(
             Transaccion.cuenta_id == cuenta_id, Transaccion.hash_deduplicacion != None
         ).all()
     )
 
-    # Extraer movimientos con el parser
     movimientos = extract_movements_from_pdf(content, cuenta_id, existing_hashes)
 
-    # Sugerir categorías automáticas basadas en conceptos comunes
     cats = db.query(Categoria).all()
     gas_cat = next((c.id for c in cats if "GASOLINA" in c.nombre.upper()), None)
     cli_cat = next((c.id for c in cats if "CLIENTE" in c.nombre.upper()), None)
@@ -280,12 +411,10 @@ async def extraer_movimientos_pdf(
 
 @app.post("/api/transacciones/batch-import")
 def confirmar_importacion_lote(payload: BatchImportConfirm, db: Session = Depends(get_db)):
-    """Guarda en firme la lista de movimientos extraídos tras revisión del usuario."""
     insertados = 0
     ignorados = 0
 
     for m in payload.movimientos:
-        # Evitar insertar duplicados marcados o preexistentes
         if m.es_duplicado:
             ignorados += 1
             continue
@@ -337,34 +466,13 @@ def reporte_financiero_global(
     total_salidas = query.filter(Transaccion.tipo == "SALIDA").with_entities(func.coalesce(func.sum(Transaccion.monto), 0)).scalar()
     balance_periodo = Decimal(str(total_entradas)) - Decimal(str(total_salidas))
 
-    # Desglose por Categoría
-    desglose_cats = db.query(
-        Categoria.nombre,
-        Transaccion.tipo,
-        func.sum(Transaccion.monto).label("total")
-    ).join(Transaccion, Transaccion.categoria_id == Categoria.id)\
-     .filter(Transaccion.cuenta_id == cuenta_id if cuenta_id else True)\
-     .group_by(Categoria.nombre, Transaccion.tipo).all()
-
-    # Desglose por Entidad (Top Clientes / Proveedores)
-    desglose_entidades = db.query(
-        Entidad.nombre,
-        Entidad.tipo_entidad,
-        func.sum(Transaccion.monto).label("total")
-    ).join(Transaccion, Transaccion.entidad_id == Entidad.id)\
-     .filter(Transaccion.cuenta_id == cuenta_id if cuenta_id else True)\
-     .group_by(Entidad.nombre, Entidad.tipo_entidad)\
-     .order_by(func.sum(Transaccion.monto).desc()).limit(10).all()
-
     return {
         "total_entradas": total_entradas,
         "total_salidas": total_salidas,
-        "balance_periodo": balance_periodo,
-        "por_categoria": [{"categoria": r[0], "tipo": r[1], "monto": float(r[2])} for r in desglose_cats],
-        "top_entidades": [{"nombre": r[0], "tipo": r[1], "monto": float(r[2])} for r in desglose_entidades]
+        "balance_periodo": balance_periodo
     }
 
-# Montar frontend estático si existe
+# Montar frontend estático
 frontend_dir = os.path.join(os.path.dirname(__file__), "..", "frontend", "static")
 if os.path.exists(frontend_dir):
     app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
@@ -372,4 +480,3 @@ if os.path.exists(frontend_dir):
     @app.get("/")
     def index():
         return FileResponse(os.path.join(frontend_dir, "index.html"))
-

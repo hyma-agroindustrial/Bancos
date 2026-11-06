@@ -2,6 +2,18 @@ from sqlalchemy import Column, Integer, String, Numeric, Boolean, Date, DateTime
 from sqlalchemy.orm import relationship
 from .database import Base
 
+class Usuario(Base):
+    __tablename__ = "usuarios"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(50), unique=True, nullable=False, index=True)
+    nombre = Column(String(100), nullable=False)
+    pin_hash = Column(String(128), nullable=False)
+    rol = Column(String(20), default="ADMIN", nullable=False) # 'ADMIN', 'CAPTURISTA'
+    activo = Column(Boolean, default=True, nullable=False)
+    token_sesion = Column(String(64), nullable=True, index=True)
+    created_at = Column(DateTime, server_default=func.now())
+
 class Cuenta(Base):
     __tablename__ = "cuentas"
 
@@ -69,4 +81,3 @@ class Transaccion(Base):
     cuenta = relationship("Cuenta", back_populates="transacciones")
     categoria = relationship("Categoria", back_populates="transacciones")
     entidad = relationship("Entidad", back_populates="transacciones")
-

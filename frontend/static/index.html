@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Hyma Agroindustrial · Control Fiscal & Gastos</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -30,63 +30,124 @@
         [x-cloak] { display: none !important; }
     </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen font-sans" x-data="agroApp()" x-init="initApp()" x-cloak>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased" x-data="agroApp()" x-init="initApp()" x-cloak>
+
+    <!-- PANTALLA DE ACCESO (LOGIN POR USUARIO Y PIN) -->
+    <div x-show="!usuarioActual" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-md">
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-sm w-full p-8 shadow-2xl text-center space-y-6">
+            <div class="w-16 h-16 rounded-2xl bg-emerald-600/20 border border-emerald-500/40 text-emerald-400 text-3xl flex items-center justify-center mx-auto shadow-lg shadow-emerald-950">
+                🌱
+            </div>
+            
+            <div>
+                <h2 class="text-xl font-black text-white tracking-wide">HYMA AGROINDUSTRIAL</h2>
+                <p class="text-xs text-slate-400 mt-1">Ingreso con Usuario y PIN de Seguridad</p>
+            </div>
+
+            <form @submit.prevent="login" class="space-y-4 text-left">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Usuario</label>
+                    <input type="text" x-model="loginForm.username" required placeholder="admin" autofocus class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white focus:ring-2 focus:ring-emerald-500">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">PIN Numérico</label>
+                    <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" x-model="loginForm.pin" required placeholder="••••" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-center text-xl font-mono tracking-widest text-white focus:ring-2 focus:ring-emerald-500">
+                </div>
+
+                <div x-show="loginError" class="p-2.5 rounded-lg bg-rose-950/60 border border-rose-800/80 text-rose-300 text-xs text-center" x-text="loginError"></div>
+
+                <button type="submit" :disabled="loading" class="w-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-emerald-950 transition text-sm flex items-center justify-center gap-2">
+                    <span x-show="loading" class="animate-spin">⏳</span>
+                    <span>Ingresar al Sistema</span>
+                </button>
+            </form>
+
+            <div class="text-[11px] text-slate-500 pt-2 border-t border-slate-800">
+                Acceso inicial predeterminado: <span class="text-slate-300 font-mono">admin</span> / PIN: <span class="text-slate-300 font-mono">1234</span>
+            </div>
+        </div>
+    </div>
 
     <!-- NAVBAR SUPERIOR -->
     <header class="bg-slate-950 border-b border-slate-800 sticky top-0 z-40">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex justify-between items-center">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex justify-between items-center">
             <div class="flex items-center space-x-3">
-                <div class="w-10 h-10 rounded-lg bg-emerald-600 flex items-center justify-center font-bold text-xl text-white shadow-lg shadow-emerald-900/50">
+                <div class="w-9 h-9 rounded-lg bg-emerald-600 flex items-center justify-center font-bold text-lg text-white shadow-md shadow-emerald-900/50">
                     🌱
                 </div>
                 <div>
-                    <h1 class="text-lg font-bold text-white tracking-wide">HYMA AGROINDUSTRIAL</h1>
-                    <p class="text-xs text-slate-400">Sistema de Control de Gastos & Cuentas Fiscales</p>
+                    <h1 class="text-sm sm:text-base font-bold text-white tracking-wide">HYMA AGROINDUSTRIAL</h1>
+                    <p class="text-[10px] sm:text-xs text-slate-400">Control Fiscal & Conciliación Bancaria</p>
                 </div>
             </div>
             
             <div class="flex items-center space-x-2">
-                <button @click="openModalCuenta = true" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-2 rounded-lg font-medium transition flex items-center gap-1.5">
-                    <span>🏦</span>
-                    <span>Nueva Cuenta</span>
+                <!-- Botón Usuarios -->
+                <button @click="openModalUsuarios = true; cargarUsuarios()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg font-medium transition flex items-center gap-1.5">
+                    <span>👥</span>
+                    <span class="hidden sm:inline">Usuarios</span>
                 </button>
+
+                <!-- Botón Nueva Cuenta -->
+                <button @click="abrirModalCrearCuenta()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg font-medium transition flex items-center gap-1.5">
+                    <span>🏦</span>
+                    <span class="hidden sm:inline">Nueva Cuenta</span>
+                </button>
+
+                <!-- Badge Usuario Actual & Logout -->
+                <div class="flex items-center pl-2 border-l border-slate-800 space-x-2" x-show="usuarioActual">
+                    <span class="text-xs font-semibold px-2 py-1 rounded-md bg-emerald-950 text-emerald-400 border border-emerald-800/80 hidden md:inline" x-text="usuarioActual ? usuarioActual.nombre : ''"></span>
+                    <button @click="logout" title="Cerrar Sesión" class="text-xs bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/60 px-2 py-1.5 rounded-lg transition">
+                        🚪 Salir
+                    </button>
+                </div>
             </div>
         </div>
     </header>
 
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-6">
 
-        <!-- 1. RESUMEN DE CUENTAS BANCARIAS (SALDOS EN TIEMPO REAL) -->
+        <!-- 1. RESUMEN DE CUENTAS BANCARIAS (MODIFICAR & ELIMINAR) -->
         <section>
             <div class="flex justify-between items-center mb-3">
-                <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Cuentas Bancarias Registradas</h2>
-                <span class="text-xs text-slate-500">Actualizado con entradas y salidas</span>
+                <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400">Cuentas Bancarias Registradas</h2>
+                <span class="text-xs text-slate-500 font-mono" x-text="cuentas.length + ' cuenta(s) activa(s)'"></span>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <template x-for="cta in cuentas" :key="cta.id">
-                    <div class="bg-slate-800/80 border border-slate-700/80 rounded-xl p-4 shadow-sm hover:border-emerald-500/50 transition">
-                        <div class="flex justify-between items-start mb-2">
-                            <div>
-                                <span class="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800/60" x-text="cta.banco"></span>
-                                <h3 class="text-base font-bold text-white mt-1" x-text="cta.nombre"></h3>
-                            </div>
-                            <span class="text-xs text-slate-400 font-mono" x-text="'No. ' + cta.numero_cuenta"></span>
+                    <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 shadow-sm hover:border-emerald-500/50 transition relative group">
+                        
+                        <!-- Acciones: Modificar y Eliminar -->
+                        <div class="absolute top-3 right-3 flex space-x-1.5">
+                            <button @click="abrirModalEditarCuenta(cta)" title="Modificar Datos de Cuenta" class="p-1.5 text-slate-400 hover:text-white bg-slate-900 hover:bg-slate-700 rounded-lg text-xs transition">
+                                ✏️
+                            </button>
+                            <button @click="eliminarCuenta(cta)" title="Eliminar Cuenta" class="p-1.5 text-slate-400 hover:text-rose-400 bg-slate-900 hover:bg-rose-950 rounded-lg text-xs transition">
+                                🗑️
+                            </button>
+                        </div>
+
+                        <div class="pr-16">
+                            <span class="text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800/60" x-text="cta.banco"></span>
+                            <h3 class="text-base font-bold text-white mt-1" x-text="cta.nombre"></h3>
                         </div>
 
                         <div class="mt-4 pt-3 border-t border-slate-700/60 flex justify-between items-end">
                             <div>
-                                <p class="text-xs text-slate-400">Saldo Contable Actual</p>
-                                <p class="text-xl font-black text-white" :class="cta.saldo_actual >= 0 ? 'text-emerald-400' : 'text-rose-400'" x-text="formatMoney(cta.saldo_actual)"></p>
+                                <p class="text-[11px] text-slate-400">Saldo Contable Actual</p>
+                                <p class="text-xl font-black font-mono text-white" :class="cta.saldo_actual >= 0 ? 'text-emerald-400' : 'text-rose-400'" x-text="formatMoney(cta.saldo_actual)"></p>
                             </div>
-                            <div class="text-right text-[11px] text-slate-400">
+                            <div class="text-right text-[11px] text-slate-400 font-mono">
                                 <div><span class="text-emerald-400">+</span> <span x-text="formatMoney(cta.total_entradas)"></span></div>
                                 <div><span class="text-rose-400">-</span> <span x-text="formatMoney(cta.total_salidas)"></span></div>
                             </div>
                         </div>
 
-                        <div class="mt-2 text-[11px] text-slate-500 truncate font-mono">
-                            CLABE: <span class="text-slate-300" x-text="cta.clabe"></span>
+                        <div class="mt-2.5 pt-2 border-t border-slate-700/40 text-[11px] text-slate-400 space-y-0.5 font-mono">
+                            <div>Cuenta: <span class="text-slate-200" x-text="cta.numero_cuenta"></span></div>
+                            <div class="truncate">CLABE: <span class="text-slate-200" x-text="cta.clabe"></span></div>
                         </div>
                     </div>
                 </template>
@@ -95,27 +156,27 @@
 
         <!-- 2. PESTAÑAS PRINCIPALES -->
         <section class="bg-slate-950 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
-            <div class="border-b border-slate-800 bg-slate-900/60 px-4 flex space-x-4">
-                <button @click="activeTab = 'manual'" :class="activeTab === 'manual' ? 'border-emerald-500 text-emerald-400 font-bold' : 'border-transparent text-slate-400 hover:text-slate-200'" class="py-3.5 px-3 border-b-2 text-sm flex items-center gap-2 transition">
+            <div class="border-b border-slate-800 bg-slate-900/60 px-4 flex space-x-2 sm:space-x-4 overflow-x-auto">
+                <button @click="activeTab = 'manual'" :class="activeTab === 'manual' ? 'border-emerald-500 text-emerald-400 font-bold' : 'border-transparent text-slate-400 hover:text-slate-200'" class="py-3 px-2 sm:px-3 border-b-2 text-xs sm:text-sm flex items-center gap-1.5 whitespace-nowrap transition">
                     <span>✍️</span> <span>Captura Manual</span>
                 </button>
-                <button @click="activeTab = 'pdf'" :class="activeTab === 'pdf' ? 'border-emerald-500 text-emerald-400 font-bold' : 'border-transparent text-slate-400 hover:text-slate-200'" class="py-3.5 px-3 border-b-2 text-sm flex items-center gap-2 transition">
-                    <span>📄</span> <span>Carga Estado de Cuenta (PDF)</span>
+                <button @click="activeTab = 'pdf'" :class="activeTab === 'pdf' ? 'border-emerald-500 text-emerald-400 font-bold' : 'border-transparent text-slate-400 hover:text-slate-200'" class="py-3 px-2 sm:px-3 border-b-2 text-xs sm:text-sm flex items-center gap-1.5 whitespace-nowrap transition">
+                    <span>📄</span> <span>Carga Estado Cuenta (PDF)</span>
                 </button>
-                <button @click="activeTab = 'reportes'" :class="activeTab === 'reportes' ? 'border-emerald-500 text-emerald-400 font-bold' : 'border-transparent text-slate-400 hover:text-slate-200'" class="py-3.5 px-3 border-b-2 text-sm flex items-center gap-2 transition">
-                    <span>📊</span> <span>Reportes y Movimientos</span>
+                <button @click="activeTab = 'reportes'" :class="activeTab === 'reportes' ? 'border-emerald-500 text-emerald-400 font-bold' : 'border-transparent text-slate-400 hover:text-slate-200'" class="py-3 px-2 sm:px-3 border-b-2 text-xs sm:text-sm flex items-center gap-1.5 whitespace-nowrap transition">
+                    <span>📊</span> <span>Reportes & Movimientos</span>
                 </button>
             </div>
 
             <!-- TAB 1: FORMULARIO DINÁMICO DE CAPTURA MANUAL -->
-            <div x-show="activeTab === 'manual'" class="p-6">
-                <form @submit.prevent="guardarTransaccionManual" class="space-y-5">
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div x-show="activeTab === 'manual'" class="p-4 sm:p-6">
+                <form @submit.prevent="guardarTransaccionManual" class="space-y-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         
                         <!-- Cuenta Afectada -->
                         <div>
-                            <label class="block text-xs font-semibold text-slate-300 mb-1.5">Cuenta Bancaria *</label>
-                            <select x-model="form.cuenta_id" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500">
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Cuenta Bancaria *</label>
+                            <select x-model="form.cuenta_id" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500">
                                 <option value="">Selecciona cuenta...</option>
                                 <template x-for="cta in cuentas" :key="cta.id">
                                     <option :value="cta.id" x-text="cta.nombre + ' (' + cta.banco + ')'"></option>
@@ -125,12 +186,12 @@
 
                         <!-- Tipo de Movimiento -->
                         <div>
-                            <label class="block text-xs font-semibold text-slate-300 mb-1.5">Tipo de Movimiento *</label>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Tipo de Movimiento *</label>
                             <div class="grid grid-cols-2 gap-2">
-                                <button type="button" @click="form.tipo = 'ENTRADA'; onTipoChange()" :class="form.tipo === 'ENTRADA' ? 'bg-emerald-600 text-white font-bold' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'" class="py-2 text-xs rounded-lg border border-slate-700 transition">
+                                <button type="button" @click="form.tipo = 'ENTRADA'; onTipoChange()" :class="form.tipo === 'ENTRADA' ? 'bg-emerald-600 text-white font-bold' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'" class="py-2 text-xs rounded-xl border border-slate-700 transition">
                                     📥 Entrada (Abono)
                                 </button>
-                                <button type="button" @click="form.tipo = 'SALIDA'; onTipoChange()" :class="form.tipo === 'SALIDA' ? 'bg-rose-600 text-white font-bold' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'" class="py-2 text-xs rounded-lg border border-slate-700 transition">
+                                <button type="button" @click="form.tipo = 'SALIDA'; onTipoChange()" :class="form.tipo === 'SALIDA' ? 'bg-rose-600 text-white font-bold' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'" class="py-2 text-xs rounded-xl border border-slate-700 transition">
                                     📤 Salida (Gasto)
                                 </button>
                             </div>
@@ -138,16 +199,16 @@
 
                         <!-- Fecha -->
                         <div>
-                            <label class="block text-xs font-semibold text-slate-300 mb-1.5">Fecha de Operación *</label>
-                            <input type="date" x-model="form.fecha" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500">
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Fecha de Operación *</label>
+                            <input type="date" x-model="form.fecha" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500">
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <!-- Categoría Dinámica -->
                         <div>
-                            <label class="block text-xs font-semibold text-slate-300 mb-1.5">Categoría Fiscal *</label>
-                            <select x-model="form.categoria_id" @change="onCategoriaChange()" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500">
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Categoría Fiscal *</label>
+                            <select x-model="form.categoria_id" @change="onCategoriaChange()" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500">
                                 <option value="">Selecciona categoría...</option>
                                 <template x-for="cat in categoriasFiltradas" :key="cat.id">
                                     <option :value="cat.id" x-text="cat.nombre"></option>
@@ -157,14 +218,14 @@
 
                         <!-- Input Condicional: Cliente / Gasolinera / Proveedor -->
                         <div>
-                            <div class="flex justify-between items-center mb-1.5">
+                            <div class="flex justify-between items-center mb-1">
                                 <label class="text-xs font-semibold text-slate-300" x-text="labelEntidadDinamica"></label>
-                                <button type="button" @click="abrirModalCrearEntidad()" class="text-[11px] text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-semibold">
-                                    <span>➕</span> <span>Agregar al vuelo</span>
+                                <button type="button" @click="abrirModalCrearEntidad()" class="text-[11px] text-emerald-400 hover:text-emerald-300 font-semibold">
+                                    ➕ Agregar al vuelo
                                 </button>
                             </div>
 
-                            <select x-model="form.entidad_id" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500">
+                            <select x-model="form.entidad_id" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500">
                                 <option value="">Selecciona <span x-text="labelEntidadDinamica"></span>...</option>
                                 <template x-for="ent in entidadesFiltradas" :key="ent.id">
                                     <option :value="ent.id" x-text="ent.nombre + (ent.rfc ? ' (' + ent.rfc + ')' : '')"></option>
@@ -174,30 +235,30 @@
 
                         <!-- Monto -->
                         <div>
-                            <label class="block text-xs font-semibold text-slate-300 mb-1.5">Monto Total ($ MXN) *</label>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Monto Total ($ MXN) *</label>
                             <div class="relative">
-                                <span class="absolute left-3 top-2 text-slate-500 text-sm">$</span>
-                                <input type="number" step="0.01" min="0.01" x-model="form.monto" required placeholder="0.00" class="w-full bg-slate-900 border border-slate-700 rounded-lg pl-7 pr-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 font-mono text-lg font-semibold">
+                                <span class="absolute left-3 top-2 text-slate-500 text-sm font-bold">$</span>
+                                <input type="number" step="0.01" min="0.01" x-model="form.monto" required placeholder="0.00" class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-7 pr-3 py-2 text-base text-white focus:ring-2 focus:ring-emerald-500 font-mono font-bold">
                             </div>
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <!-- Concepto / Descripción -->
                         <div>
-                            <label class="block text-xs font-semibold text-slate-300 mb-1.5">Concepto o Descripción Bancaria *</label>
-                            <input type="text" x-model="form.concepto" required placeholder="Ej. Diésel para tractor John Deere lote norte" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500">
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Concepto o Detalle *</label>
+                            <input type="text" x-model="form.concepto" required placeholder="Ej. Diésel para tractor John Deere lote norte" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500">
                         </div>
 
                         <!-- Referencia / Folio -->
                         <div>
-                            <label class="block text-xs font-semibold text-slate-300 mb-1.5">Referencia o Folio SPEI (Opcional)</label>
-                            <input type="text" x-model="form.referencia" placeholder="Ej. Folio 984128 / Factura A-102" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 font-mono">
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Referencia o Folio SPEI (Opcional)</label>
+                            <input type="text" x-model="form.referencia" placeholder="Ej. Factura 128 / Folio SPEI 99182" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 font-mono">
                         </div>
                     </div>
 
                     <div class="flex justify-end pt-3 border-t border-slate-800">
-                        <button type="submit" :disabled="loading" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm px-6 py-2.5 rounded-lg shadow-lg shadow-emerald-900/40 transition flex items-center gap-2">
+                        <button type="submit" :disabled="loading" class="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm px-6 py-2.5 rounded-xl shadow-lg shadow-emerald-950 transition flex items-center justify-center gap-2">
                             <span x-show="loading" class="animate-spin">⏳</span>
                             <span>Registrar Movimiento</span>
                         </button>
@@ -206,16 +267,16 @@
             </div>
 
             <!-- TAB 2: EXTRACCIÓN AUTOMATIZADA DE PDF BANCARIO -->
-            <div x-show="activeTab === 'pdf'" class="p-6 space-y-6">
-                <div class="bg-slate-900 border border-dashed border-slate-700 rounded-xl p-8 text-center max-w-2xl mx-auto">
-                    <div class="text-4xl mb-3">📑</div>
-                    <h3 class="text-base font-bold text-white mb-1">Cargar Estado de Cuenta Bancario en PDF</h3>
-                    <p class="text-xs text-slate-400 mb-4">El motor extraerá automáticamente fecha, concepto, abonos (entradas) y cargos (salidas) utilizando <code class="text-emerald-400 font-mono">pdfplumber</code>.</p>
+            <div x-show="activeTab === 'pdf'" class="p-4 sm:p-6 space-y-6">
+                <div class="bg-slate-900 border border-dashed border-slate-700 rounded-2xl p-6 text-center max-w-xl mx-auto">
+                    <div class="text-4xl mb-2">📑</div>
+                    <h3 class="text-base font-bold text-white mb-1">Cargar Estado de Cuenta PDF</h3>
+                    <p class="text-xs text-slate-400 mb-4">Extracción automática de cargos, abonos y detección de movimientos duplicados.</p>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-left mb-5">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left mb-4">
                         <div>
-                            <label class="block text-xs font-semibold text-slate-300 mb-1">Cuenta Bancaria Destino *</label>
-                            <select x-model="pdfCuentaId" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white">
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Cuenta Destino *</label>
+                            <select x-model="pdfCuentaId" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
                                 <option value="">Selecciona cuenta...</option>
                                 <template x-for="cta in cuentas" :key="cta.id">
                                     <option :value="cta.id" x-text="cta.nombre + ' (' + cta.banco + ')'"></option>
@@ -224,25 +285,25 @@
                         </div>
                         <div>
                             <label class="block text-xs font-semibold text-slate-300 mb-1">Archivo PDF *</label>
-                            <input type="file" accept=".pdf" @change="onPdfFileSelected" class="w-full text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-500">
+                            <input type="file" accept=".pdf" @change="onPdfFileSelected" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-500">
                         </div>
                     </div>
 
-                    <button @click="procesarPdf" :disabled="loading || !pdfFile || !pdfCuentaId" class="bg-emerald-600 disabled:opacity-40 hover:bg-emerald-500 text-white font-bold text-xs px-5 py-2.5 rounded-lg transition shadow-md">
-                        <span x-show="loading">Procesando documento...</span>
+                    <button @click="procesarPdf" :disabled="loading || !pdfFile || !pdfCuentaId" class="w-full sm:w-auto bg-emerald-600 disabled:opacity-40 hover:bg-emerald-500 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition shadow-md">
+                        <span x-show="loading">Procesando estado de cuenta...</span>
                         <span x-show="!loading">🚀 Analizar y Extraer Movimientos</span>
                     </button>
                 </div>
 
-                <!-- TABLA DE MOVIMIENTOS EXTRAÍDOS PARA REVISIÓN -->
+                <!-- TABLA DE MOVIMIENTOS EXTRAÍDOS -->
                 <div x-show="movimientosExtraidos.length > 0" class="space-y-3">
-                    <div class="flex justify-between items-center">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                         <div>
                             <h4 class="text-sm font-bold text-white">Movimientos Extraídos del PDF</h4>
-                            <p class="text-xs text-slate-400">Revisa la clasificación antes de confirmar el guardado en base de datos.</p>
+                            <p class="text-xs text-slate-400">Verifica la clasificación de categorías antes de guardarlos.</p>
                         </div>
-                        <button @click="guardarLotePdf" :disabled="loading" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-lg transition">
-                            💾 Confirmar e Importar (<span x-text="movimientosExtraidos.filter(m => !m.es_duplicado).length"></span>) Movimientos
+                        <button @click="guardarLotePdf" :disabled="loading" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition">
+                            💾 Confirmar e Importar (<span x-text="movimientosExtraidos.filter(m => !m.es_duplicado).length"></span>)
                         </button>
                     </div>
 
@@ -255,7 +316,7 @@
                                     <th class="p-3">Concepto</th>
                                     <th class="p-3">Tipo</th>
                                     <th class="p-3">Monto</th>
-                                    <th class="p-3">Categoría Asignada</th>
+                                    <th class="p-3">Categoría</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-800/80">
@@ -272,7 +333,7 @@
                                         </td>
                                         <td class="p-3 font-mono font-bold" :class="m.tipo === 'ENTRADA' ? 'text-emerald-400' : 'text-rose-400'" x-text="formatMoney(m.monto)"></td>
                                         <td class="p-3">
-                                            <select x-model="m.categoria_id_sugerida" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white">
+                                            <select x-model="m.categoria_id_sugerida" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white">
                                                 <option value="">Sin categoría...</option>
                                                 <template x-for="cat in categorias" :key="cat.id">
                                                     <option :value="cat.id" x-text="cat.nombre"></option>
@@ -288,9 +349,9 @@
             </div>
 
             <!-- TAB 3: REPORTES Y LISTA DE MOVIMIENTOS -->
-            <div x-show="activeTab === 'reportes'" class="p-6 space-y-6">
+            <div x-show="activeTab === 'reportes'" class="p-4 sm:p-6 space-y-5">
                 <!-- BARRA DE FILTROS -->
-                <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+                <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
                     <div>
                         <label class="block text-[11px] font-semibold text-slate-400 mb-1">Cuenta</label>
                         <select x-model="filtros.cuenta_id" @change="filtrarTransacciones" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
@@ -333,18 +394,18 @@
                 </div>
 
                 <!-- RESUMEN DE SALDOS DEL REPORTE -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
-                        <p class="text-xs text-slate-400 font-semibold">Total Entradas (Cobranza / Depósitos)</p>
-                        <p class="text-xl font-bold text-emerald-400 font-mono mt-1" x-text="formatMoney(resumenReporte.total_entradas)"></p>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
+                        <p class="text-[11px] text-slate-400 font-semibold">Total Entradas</p>
+                        <p class="text-lg font-bold text-emerald-400 font-mono mt-0.5" x-text="formatMoney(resumenReporte.total_entradas)"></p>
                     </div>
-                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
-                        <p class="text-xs text-slate-400 font-semibold">Total Salidas (Gastos / Proveedores)</p>
-                        <p class="text-xl font-bold text-rose-400 font-mono mt-1" x-text="formatMoney(resumenReporte.total_salidas)"></p>
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
+                        <p class="text-[11px] text-slate-400 font-semibold">Total Salidas</p>
+                        <p class="text-lg font-bold text-rose-400 font-mono mt-0.5" x-text="formatMoney(resumenReporte.total_salidas)"></p>
                     </div>
-                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
-                        <p class="text-xs text-slate-400 font-semibold">Flujo Neto del Periodo</p>
-                        <p class="text-xl font-bold font-mono mt-1" :class="resumenReporte.balance_periodo >= 0 ? 'text-emerald-400' : 'text-rose-400'" x-text="formatMoney(resumenReporte.balance_periodo)"></p>
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
+                        <p class="text-[11px] text-slate-400 font-semibold">Balance del Periodo</p>
+                        <p class="text-lg font-bold font-mono mt-0.5" :class="resumenReporte.balance_periodo >= 0 ? 'text-emerald-400' : 'text-rose-400'" x-text="formatMoney(resumenReporte.balance_periodo)"></p>
                     </div>
                 </div>
 
@@ -359,7 +420,6 @@
                                 <th class="p-3">Categoría</th>
                                 <th class="p-3">Cliente / Proveedor</th>
                                 <th class="p-3 text-right">Monto</th>
-                                <th class="p-3">Origen</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-800/80">
@@ -373,13 +433,10 @@
                                     </td>
                                     <td class="p-3 text-emerald-400 font-medium" x-text="t.entidad_nombre || '-'"></td>
                                     <td class="p-3 text-right font-mono font-bold" :class="t.tipo === 'ENTRADA' ? 'text-emerald-400' : 'text-rose-400'" x-text="(t.tipo === 'ENTRADA' ? '+' : '-') + ' ' + formatMoney(t.monto)"></td>
-                                    <td class="p-3">
-                                        <span class="text-[10px] font-mono px-1.5 py-0.5 rounded" :class="t.origen === 'PDF_EXTRACT' ? 'bg-indigo-950 text-indigo-300' : 'bg-slate-800 text-slate-400'" x-text="t.origen"></span>
-                                    </td>
                                 </tr>
                             </template>
                             <tr x-show="transacciones.length === 0">
-                                <td colspan="7" class="p-8 text-center text-slate-500">No se encontraron movimientos con los filtros aplicados.</td>
+                                <td colspan="6" class="p-6 text-center text-slate-500">No se encontraron movimientos con los filtros aplicados.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -388,73 +445,132 @@
         </section>
     </main>
 
-    <!-- MODAL: AGREGAR ENTIDAD AL VUELO (CLIENTE / PROVEEDOR / GASOLINERA) -->
-    <div x-show="openModalEntidad" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm" x-cloak>
-        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl" @click.away="openModalEntidad = false">
-            <h3 class="text-base font-bold text-white mb-1" x-text="'➕ Agregar Nuevo ' + labelModalEntidad"></h3>
-            <p class="text-xs text-slate-400 mb-4">Se guardará automáticamente para autocompletar en futuras capturas.</p>
+    <!-- MODAL: AGREGAR O MODIFICAR CUENTA BANCARIA -->
+    <div x-show="openModalCuenta" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" x-cloak>
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-md w-full p-6 shadow-2xl" @click.away="openModalCuenta = false">
+            <h3 class="text-base font-bold text-white mb-1" x-text="cuentaEnEdicion ? '✏️ Modificar Cuenta Bancaria' : '🏦 Registrar Nueva Cuenta Bancaria'"></h3>
+            <p class="text-xs text-slate-400 mb-4">Ingresa o edita los datos bancarios y saldo inicial.</p>
 
-            <form @submit.prevent="guardarEntidadAlVuelo" class="space-y-4">
-                <div>
-                    <label class="block text-xs font-semibold text-slate-300 mb-1">Nombre o Razón Social *</label>
-                    <input type="text" x-model="modalEntidad.nombre" required placeholder="Ej. Gasolinera Oxxo Gas Valle Alto" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500">
-                </div>
-
-                <div>
-                    <label class="block text-xs font-semibold text-slate-300 mb-1">Tipo de Entidad</label>
-                    <input type="text" x-model="modalEntidad.tipo_entidad" readonly class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-400 font-mono">
-                </div>
-
-                <div>
-                    <label class="block text-xs font-semibold text-slate-300 mb-1">RFC (Opcional)</label>
-                    <input type="text" x-model="modalEntidad.rfc" maxlength="13" placeholder="XAXX010101000" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white uppercase font-mono">
-                </div>
-
-                <div class="flex justify-end space-x-2 pt-3 border-t border-slate-800">
-                    <button type="button" @click="openModalEntidad = false" class="px-4 py-2 text-xs text-slate-400 hover:text-white">Cancelar</button>
-                    <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-lg">Guardar y Seleccionar</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- MODAL: AGREGAR CUENTA BANCARIA -->
-    <div x-show="openModalCuenta" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm" x-cloak>
-        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl" @click.away="openModalCuenta = false">
-            <h3 class="text-base font-bold text-white mb-1">🏦 Registrar Nueva Cuenta Bancaria Fiscal</h3>
-            <p class="text-xs text-slate-400 mb-4">Ingresa los datos exactos del contrato o estado de cuenta.</p>
-
-            <form @submit.prevent="guardarCuenta" class="space-y-4">
+            <form @submit.prevent="guardarCuenta" class="space-y-3.5">
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs font-semibold text-slate-300 mb-1">Nombre Descriptivo *</label>
-                        <input type="text" x-model="nuevaCuenta.nombre" required placeholder="Ej. Fiscal Principal" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white">
+                        <input type="text" x-model="cuentaForm.nombre" required placeholder="Ej. Fiscal Principal" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-slate-300 mb-1">Institución Bancaria *</label>
-                        <input type="text" x-model="nuevaCuenta.banco" required placeholder="Ej. BBVA / Banorte" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white">
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Banco *</label>
+                        <input type="text" x-model="cuentaForm.banco" required placeholder="Ej. BBVA / Banorte" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
                     </div>
                 </div>
 
                 <div>
                     <label class="block text-xs font-semibold text-slate-300 mb-1">CLABE Interbancaria (18 dígitos) *</label>
-                    <input type="text" x-model="nuevaCuenta.clabe" maxlength="18" minlength="18" required placeholder="012180001234567890" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono">
+                    <input type="text" x-model="cuentaForm.clabe" maxlength="18" minlength="18" required placeholder="012180001234567890" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono">
                 </div>
 
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs font-semibold text-slate-300 mb-1">Número de Cuenta *</label>
-                        <input type="text" x-model="nuevaCuenta.numero_cuenta" required placeholder="0123456789" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono">
+                        <input type="text" x-model="cuentaForm.numero_cuenta" required placeholder="0123456789" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono">
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-slate-300 mb-1">Saldo Inicial ($)</label>
-                        <input type="number" step="0.01" x-model="nuevaCuenta.saldo_inicial" required class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono">
+                        <input type="number" step="0.01" x-model="cuentaForm.saldo_inicial" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono">
                     </div>
                 </div>
 
                 <div class="flex justify-end space-x-2 pt-3 border-t border-slate-800">
                     <button type="button" @click="openModalCuenta = false" class="px-4 py-2 text-xs text-slate-400 hover:text-white">Cancelar</button>
-                    <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-lg">Guardar Cuenta</button>
+                    <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-xl" x-text="cuentaEnEdicion ? 'Actualizar Datos' : 'Guardar Cuenta'"></button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: GESTIÓN DE USUARIOS Y PIN -->
+    <div x-show="openModalUsuarios" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" x-cloak>
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4" @click.away="openModalUsuarios = false">
+            <div class="flex justify-between items-center">
+                <h3 class="text-base font-bold text-white">👥 Control de Usuarios y PIN</h3>
+                <button @click="openModalUsuarios = false" class="text-slate-400 hover:text-white text-sm">✕</button>
+            </div>
+            
+            <p class="text-xs text-slate-400">Permite dar acceso desde celulares a operadores o contadores con su propio PIN.</p>
+
+            <!-- Formulario Crear Usuario -->
+            <form @submit.prevent="guardarNuevoUsuario" class="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-3">
+                <h4 class="text-xs font-bold text-emerald-400 uppercase">➕ Registrar Nuevo Usuario</h4>
+                <div class="grid grid-cols-2 gap-2.5">
+                    <div>
+                        <label class="block text-[11px] text-slate-400 mb-0.5">Usuario (Login)</label>
+                        <input type="text" x-model="nuevoUsuario.username" required placeholder="ej. juan" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] text-slate-400 mb-0.5">Nombre Completo</label>
+                        <input type="text" x-model="nuevoUsuario.nombre" required placeholder="Juan Pérez" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2.5">
+                    <div>
+                        <label class="block text-[11px] text-slate-400 mb-0.5">PIN Numérico (4-8 dígitos)</label>
+                        <input type="password" inputmode="numeric" maxlength="8" x-model="nuevoUsuario.pin" required placeholder="1234" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] text-slate-400 mb-0.5">Rol</label>
+                        <select x-model="nuevoUsuario.rol" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white">
+                            <option value="OPERADOR">Operador (Captura)</option>
+                            <option value="ADMIN">Administrador</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="text-right">
+                    <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-3 py-1.5 rounded-lg">Guardar Usuario</button>
+                </div>
+            </form>
+
+            <!-- Lista de Usuarios Existentes -->
+            <div class="space-y-1.5 max-h-48 overflow-y-auto">
+                <template x-for="u in listaUsuarios" :key="u.id">
+                    <div class="flex justify-between items-center p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs">
+                        <div>
+                            <span class="font-bold text-white" x-text="u.nombre"></span>
+                            <span class="text-slate-400 font-mono ml-1" x-text="'(@' + u.username + ')'"></span>
+                            <span class="px-1.5 py-0.2 rounded text-[10px] ml-1" :class="u.rol === 'ADMIN' ? 'bg-amber-950 text-amber-300' : 'bg-slate-800 text-slate-300'" x-text="u.rol"></span>
+                        </div>
+                        <button x-show="u.username !== 'admin'" @click="eliminarUsuario(u)" class="text-rose-400 hover:text-rose-300 text-xs">Desactivar</button>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: AGREGAR ENTIDAD AL VUELO -->
+    <div x-show="openModalEntidad" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" x-cloak>
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-sm w-full p-6 shadow-2xl" @click.away="openModalEntidad = false">
+            <h3 class="text-base font-bold text-white mb-1" x-text="'➕ Agregar Nuevo ' + labelModalEntidad"></h3>
+            <p class="text-xs text-slate-400 mb-4">Se guardará automáticamente para autocompletar.</p>
+
+            <form @submit.prevent="guardarEntidadAlVuelo" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Nombre / Razón Social *</label>
+                    <input type="text" x-model="modalEntidad.nombre" required placeholder="Ej. Oxxo Gas Valle Alto" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Tipo</label>
+                    <input type="text" x-model="modalEntidad.tipo_entidad" readonly class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-400 font-mono">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">RFC (Opcional)</label>
+                    <input type="text" x-model="modalEntidad.rfc" maxlength="13" placeholder="XAXX010101000" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white uppercase font-mono">
+                </div>
+
+                <div class="flex justify-end space-x-2 pt-3 border-t border-slate-800">
+                    <button type="button" @click="openModalEntidad = false" class="px-3 py-1.5 text-xs text-slate-400 hover:text-white">Cancelar</button>
+                    <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-3 py-1.5 rounded-xl">Guardar</button>
                 </div>
             </form>
         </div>
@@ -466,15 +582,24 @@
             return {
                 activeTab: 'manual',
                 loading: false,
+                usuarioActual: null,
+                tokenSesion: localStorage.getItem('hyma_token') || '',
+                loginError: '',
+                loginForm: { username: '', pin: '' },
+
                 cuentas: [],
                 categorias: [],
                 entidades: [],
                 transacciones: [],
                 movimientosExtraidos: [],
+                listaUsuarios: [],
+
                 pdfFile: null,
                 pdfCuentaId: '',
                 openModalEntidad: false,
                 openModalCuenta: false,
+                openModalUsuarios: false,
+                cuentaEnEdicion: null,
                 labelEntidadDinamica: 'Cliente / Proveedor',
                 labelModalEntidad: 'Entidad',
                 
@@ -495,13 +620,21 @@
                     rfc: ''
                 },
 
-                nuevaCuenta: {
+                cuentaForm: {
+                    id: null,
                     nombre: '',
                     banco: '',
                     clabe: '',
                     numero_cuenta: '',
                     saldo_inicial: 0.0,
                     moneda: 'MXN'
+                },
+
+                nuevoUsuario: {
+                    username: '',
+                    nombre: '',
+                    pin: '',
+                    rol: 'OPERADOR'
                 },
 
                 filtros: {
@@ -519,6 +652,60 @@
                 },
 
                 async initApp() {
+                    if (this.tokenSesion) {
+                        await this.verificarToken();
+                    }
+                    if (this.usuarioActual) {
+                        await this.recargarTodo();
+                    }
+                },
+
+                async login() {
+                    this.loading = true;
+                    this.loginError = '';
+                    try {
+                        const res = await fetch('/api/auth/login', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(this.loginForm)
+                        });
+                        if (res.ok) {
+                            const data = await res.json();
+                            this.usuarioActual = data.usuario;
+                            this.tokenSesion = data.token;
+                            localStorage.setItem('hyma_token', data.token);
+                            await this.recargarTodo();
+                        } else {
+                            const err = await res.json();
+                            this.loginError = err.detail || 'Usuario o PIN incorrecto.';
+                        }
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async verificarToken() {
+                    try {
+                        const res = await fetch('/api/auth/verify', {
+                            headers: { 'Authorization': 'Bearer ' + this.tokenSesion }
+                        });
+                        if (res.ok) {
+                            this.usuarioActual = await res.json();
+                        } else {
+                            this.logout();
+                        }
+                    } catch (e) {
+                        this.logout();
+                    }
+                },
+
+                logout() {
+                    this.usuarioActual = null;
+                    this.tokenSesion = '';
+                    localStorage.removeItem('hyma_token');
+                },
+
+                async recargarTodo() {
                     await this.cargarCuentas();
                     await this.cargarCategorias();
                     await this.cargarEntidades();
@@ -546,6 +733,11 @@
                     if (res.ok) this.entidades = await res.json();
                 },
 
+                async cargarUsuarios() {
+                    const res = await fetch('/api/usuarios');
+                    if (res.ok) this.listaUsuarios = await res.json();
+                },
+
                 get categoriasFiltradas() {
                     return this.categorias.filter(c => c.tipo === this.form.tipo || c.tipo === 'AMBOS');
                 },
@@ -570,7 +762,6 @@
                         this.labelEntidadDinamica = 'Cliente / Proveedor';
                         return;
                     }
-
                     if (cat.tipo_entidad_sugerida === 'CLIENTE') {
                         this.labelEntidadDinamica = 'Cliente Comprador *';
                         this.labelModalEntidad = 'Cliente';
@@ -594,6 +785,92 @@
                     }
                 },
 
+                abrirModalCrearCuenta() {
+                    this.cuentaEnEdicion = null;
+                    this.cuentaForm = {
+                        id: null,
+                        nombre: '',
+                        banco: '',
+                        clabe: '',
+                        numero_cuenta: '',
+                        saldo_inicial: 0.0,
+                        moneda: 'MXN'
+                    };
+                    this.openModalCuenta = true;
+                },
+
+                abrirModalEditarCuenta(cta) {
+                    this.cuentaEnEdicion = cta;
+                    this.cuentaForm = {
+                        id: cta.id,
+                        nombre: cta.nombre,
+                        banco: cta.banco,
+                        clabe: cta.clabe,
+                        numero_cuenta: cta.numero_cuenta,
+                        saldo_inicial: parseFloat(cta.saldo_inicial),
+                        moneda: cta.moneda
+                    };
+                    this.openModalCuenta = true;
+                },
+
+                async guardarCuenta() {
+                    const url = this.cuentaEnEdicion ? `/api/cuentas/${this.cuentaEnEdicion.id}` : '/api/cuentas';
+                    const method = this.cuentaEnEdicion ? 'PUT' : 'POST';
+
+                    const res = await fetch(url, {
+                        method: method,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(this.cuentaForm)
+                    });
+                    if (res.ok) {
+                        await this.cargarCuentas();
+                        this.openModalCuenta = false;
+                        alert(this.cuentaEnEdicion ? '✅ Cuenta actualizada correctamente.' : '✅ Cuenta registrada con éxito.');
+                    } else {
+                        const err = await res.json();
+                        alert(err.detail || 'Error al guardar la cuenta');
+                    }
+                },
+
+                async eliminarCuenta(cta) {
+                    if (!confirm(`¿Estás seguro de eliminar la cuenta "${cta.nombre}" (${cta.banco})? Se mantendrá el historial previo en auditoría.`)) {
+                        return;
+                    }
+                    const res = await fetch(`/api/cuentas/${cta.id}`, { method: 'DELETE' });
+                    if (res.ok) {
+                        alert('✅ Cuenta eliminada del catálogo.');
+                        await this.cargarCuentas();
+                        await this.filtrarTransacciones();
+                    } else {
+                        const err = await res.json();
+                        alert(err.detail || 'Error al eliminar');
+                    }
+                },
+
+                async guardarNuevoUsuario() {
+                    const res = await fetch('/api/usuarios', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(this.nuevoUsuario)
+                    });
+                    if (res.ok) {
+                        alert('✅ Usuario creado exitosamente.');
+                        this.nuevoUsuario = { username: '', nombre: '', pin: '', rol: 'OPERADOR' };
+                        await this.cargarUsuarios();
+                    } else {
+                        const err = await res.json();
+                        alert(err.detail || 'Error al crear usuario.');
+                    }
+                },
+
+                async eliminarUsuario(u) {
+                    if (!confirm(`¿Desactivar al usuario @${u.username}?`)) return;
+                    const res = await fetch(`/api/usuarios/${u.id}`, { method: 'DELETE' });
+                    if (res.ok) {
+                        await this.cargarUsuarios();
+                    }
+                },
+
                 abrirModalCrearEntidad() {
                     this.modalEntidad.nombre = '';
                     this.modalEntidad.rfc = '';
@@ -611,24 +888,6 @@
                         await this.cargarEntidades();
                         this.form.entidad_id = nueva.id;
                         this.openModalEntidad = false;
-                    }
-                },
-
-                async guardarCuenta() {
-                    const res = await fetch('/api/cuentas', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(this.nuevaCuenta)
-                    });
-                    if (res.ok) {
-                        await this.cargarCuentas();
-                        this.openModalCuenta = false;
-                        this.nuevaCuenta.nombre = '';
-                        this.nuevaCuenta.clabe = '';
-                        this.nuevaCuenta.numero_cuenta = '';
-                    } else {
-                        const err = await res.json();
-                        alert(err.detail || 'Error al guardar la cuenta');
                     }
                 },
 
@@ -736,4 +995,3 @@
     </script>
 </body>
 </html>
-
