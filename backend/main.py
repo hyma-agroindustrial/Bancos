@@ -7,19 +7,20 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import date
 from decimal import Decimal
 
 from .database import engine, Base, get_db
-from .models import Cuenta, Categoria, Entidad, Transaccion, Usuario
+from .models import Cuenta, Categoria, Entidad, Transaccion, Usuario, Configuracion
 from .schemas import (
     CuentaCreate, CuentaUpdate, CuentaResponse,
     CategoriaCreate, CategoriaResponse,
     EntidadCreate, EntidadResponse,
     TransaccionCreate, TransaccionResponse,
     MovimientoExtraido, BatchImportConfirm,
-    UsuarioLogin, UsuarioCreate, UsuarioResponse, AuthResponse
+    UsuarioLogin, UsuarioCreate, UsuarioResponse, AuthResponse,
+    ConfiguracionData
 )
 from .parsers.bank_pdf_parser import extract_movements_from_pdf
 
@@ -27,9 +28,9 @@ from .parsers.bank_pdf_parser import extract_movements_from_pdf
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
-    title="Hyma Agroindustrial - Control Fiscal & Gastos",
-    version="1.1.0",
-    description="Sistema contable automatizado con control de usuarios por PIN, ingesta de estados de cuenta PDF y conciliación de cuentas fiscales."
+    title="Consolidado de Bancos - Control Fiscal & Gastos",
+    version="1.2.0",
+    description="Sistema contable automatizado con personalización de marca, captura al vuelo de categorías y conciliación bancaria."
 )
 
 app.add_middleware(
@@ -41,7 +42,6 @@ app.add_middleware(
 )
 
 def hash_pin(pin: str) -> str:
-    """Cifra el PIN de 4-8 dígitos con salteado criptográfico."""
     return hashlib.sha256(f"hyma_bancos_salt_{pin}".encode("utf-8")).hexdigest()
 
 # SEED DATA AL INICIO
@@ -49,7 +49,18 @@ def hash_pin(pin: str) -> str:
 def startup_seed_data():
     db = next(get_db())
     try:
-        # 1. Seed Usuario Administrador por defecto
+        # 1. Seed Configuración del Encabezado (Nombre, Descripción, Logo)
+        cfg_defaults = {
+            "nombre_sistema": "Consolidado de Bancos",
+            "descripcion_sistema": "Sistema de Control de Gastos & Cuentas Fiscales",
+            "logo_url": ""
+        }
+        for k, v in cfg_defaults.items():
+            if not db.query(Configuracion).filter(Configuracion.clave == k).first():
+                db.add(Configuracion(clave=k, valor=v))
+        db.commit()
+
+        # 2. Seed Usuario Administrador por defecto
         if db.query(Usuario).count() == 0:
             admin_user = Usuario(
                 username="admin",
@@ -61,20 +72,31 @@ def startup_seed_data():
             db.add(admin_user)
             db.commit()
 
-        # 2. Seed Categorías iniciales
-        if db.query(Categoria).count() == 0:
-            default_cats = [
-                Categoria(nombre="Depósito Cliente", tipo="ENTRADA", tipo_entidad_sugerida="CLIENTE", descripcion="Cobranza de cosechas y productos agrícolas"),
-                Categoria(nombre="Pago Gasolina", tipo="SALIDA", tipo_entidad_sugerida="GASOLINERA", descripcion="Combustible tractores, maquinaria y transporte"),
-                Categoria(nombre="Pago Proveedor Insumos", tipo="SALIDA", tipo_entidad_sugerida="PROVEEDOR", descripcion="Fertilizantes, agroquímicos, semillas"),
-                Categoria(nombre="Pago Nómina / Jornales", tipo="SALIDA", tipo_entidad_sugerida="EMPLEADO", descripcion="Pago a personal de campo y administrativo"),
-                Categoria(nombre="Impuestos SAT / IMSS", tipo="SALIDA", tipo_entidad_sugerida="SAT", descripcion="Pagos provisionales, IVA, retenciones"),
-                Categoria(nombre="Traspaso Entre Cuentas", tipo="AMBOS", tipo_entidad_sugerida="GENERAL", descripcion="Movimientos internos entre cuentas de la empresa"),
-            ]
-            db.add_all(default_cats)
-            db.commit()
+        # 3. Seed Categorías iniciales y ampliadas
+        cats_to_seed = [
+            ("Depósito Cliente", "ENTRADA", "CLIENTE", "Cobranza de cosechas y productos agrícolas"),
+            ("Pago Gasolina / Diésel", "SALIDA", "GASOLINERA", "Combustible de tractores, maquinaria y vehículos"),
+            ("Insumos Agrícolas", "SALIDA", "PROVEEDOR", "Semillas, fertilizantes, foliares y agroquímicos"),
+            ("Herramienta y Taller", "SALIDA", "PROVEEDOR", "Herramientas de trabajo, equipo y mantenimiento"),
+            ("Papelería y Oficina", "SALIDA", "PROVEEDOR", "Artículos de papelería, impresiones y oficina"),
+            ("Comida y Viáticos", "SALIDA", "GENERAL", "Alimentos, viáticos de choferes y comidas de campo"),
+            ("Accesorios y Refacciones", "SALIDA", "PROVEEDOR", "Refacciones de maquinaria pesada, implementos"),
+            ("Ferretería y Materiales", "SALIDA", "PROVEEDOR", "Materiales de construcción, tubería, mallas"),
+            ("Luz (CFE)", "SALIDA", "SAT", "Recibos de energía eléctrica de pozos, bodegas y oficina"),
+            ("Teléfonos e Internet", "SALIDA", "PROVEEDOR", "Planes celulares, radiofrecuencia e internet en rancho"),
+            ("Agua y Derechos de Riego", "SALIDA", "SAT", "Módulos de riego, títulos Conagua, cuotas de agua"),
+            ("Rentas de Tierras / Bodegas", "SALIDA", "PROVEEDOR", "Arrendamiento de parcelas, bodegas y locales"),
+            ("Pago Nómina / Jornales", "SALIDA", "EMPLEADO", "Pago a jornaleros de campo y personal de nómina"),
+            ("Impuestos SAT / IMSS", "SALIDA", "SAT", "Pagos provisionales, IVA, retenciones y cuotas obrero-patronales"),
+            ("Traspaso Entre Cuentas", "AMBOS", "GENERAL", "Movimientos internos entre cuentas de la misma empresa"),
+        ]
+        
+        for nom, tipo, tip_ent, desc in cats_to_seed:
+            if not db.query(Categoria).filter(Categoria.nombre == nom).first():
+                db.add(Categoria(nombre=nom, tipo=tipo, tipo_entidad_sugerida=tip_ent, descripcion=desc))
+        db.commit()
 
-        # 3. Seed cuenta demo si no existe ninguna
+        # 4. Seed cuenta demo si no existe ninguna
         if db.query(Cuenta).count() == 0:
             demo_acc = Cuenta(
                 nombre="Fiscal Principal",
@@ -92,6 +114,35 @@ def startup_seed_data():
 
 
 # ====================================================================================================
+# CONFIGURACIÓN PERSONALIZABLE DE MARCA (NOMBRE, LOGO, DESCRIPCIÓN)
+# ====================================================================================================
+@app.get("/api/configuracion", response_model=ConfiguracionData)
+def obtener_configuracion(db: Session = Depends(get_db)):
+    cfg_rows = db.query(Configuracion).all()
+    cfg_dict = {r.clave: r.valor for r in cfg_rows}
+    return ConfiguracionData(
+        nombre_sistema=cfg_dict.get("nombre_sistema", "Consolidado de Bancos"),
+        descripcion_sistema=cfg_dict.get("descripcion_sistema", "Sistema de Control de Gastos & Cuentas Fiscales"),
+        logo_url=cfg_dict.get("logo_url", "")
+    )
+
+@app.post("/api/configuracion", response_model=ConfiguracionData)
+def guardar_configuracion(data: ConfiguracionData, db: Session = Depends(get_db)):
+    for k, v in [
+        ("nombre_sistema", data.nombre_sistema),
+        ("descripcion_sistema", data.descripcion_sistema),
+        ("logo_url", data.logo_url or "")
+    ]:
+        row = db.query(Configuracion).filter(Configuracion.clave == k).first()
+        if row:
+            row.valor = v
+        else:
+            db.add(Configuracion(clave=k, valor=v))
+    db.commit()
+    return data
+
+
+# ====================================================================================================
 # 0. CONTROL DE ACCESO (USUARIO + PIN) PARA ACCESO DESDE CUALQUIER DISPOSITIVO
 # ====================================================================================================
 @app.post("/api/auth/login", response_model=AuthResponse)
@@ -100,7 +151,6 @@ def login_usuario(payload: UsuarioLogin, db: Session = Depends(get_db)):
     if not user or user.pin_hash != hash_pin(payload.pin.strip()):
         raise HTTPException(status_code=401, detail="Usuario o PIN incorrecto.")
 
-    # Generar token de sesión persistente para celular / tablet
     token = secrets.token_hex(24)
     user.token_sesion = token
     db.commit()
@@ -200,12 +250,10 @@ def crear_cuenta(cuenta: CuentaCreate, db: Session = Depends(get_db)):
 
 @app.put("/api/cuentas/{cuenta_id}", response_model=CuentaResponse)
 def modificar_cuenta(cuenta_id: int, datos: CuentaUpdate, db: Session = Depends(get_db)):
-    """Permite modificar nombre, banco, CLABE, número de cuenta o saldo inicial."""
     cuenta = db.query(Cuenta).filter(Cuenta.id == cuenta_id).first()
     if not cuenta:
         raise HTTPException(status_code=404, detail="Cuenta bancaria no encontrada.")
 
-    # Validar que si cambia CLABE o número de cuenta, no colisione con otra
     if datos.clabe and datos.clabe != cuenta.clabe:
         existe_clabe = db.query(Cuenta).filter(Cuenta.clabe == datos.clabe, Cuenta.id != cuenta_id).first()
         if existe_clabe:
@@ -232,7 +280,6 @@ def modificar_cuenta(cuenta_id: int, datos: CuentaUpdate, db: Session = Depends(
     db.commit()
     db.refresh(cuenta)
 
-    # Recalcular saldo
     entradas = db.query(func.coalesce(func.sum(Transaccion.monto), 0)).filter(
         Transaccion.cuenta_id == cuenta.id, Transaccion.tipo == "ENTRADA"
     ).scalar()
@@ -248,19 +295,17 @@ def modificar_cuenta(cuenta_id: int, datos: CuentaUpdate, db: Session = Depends(
 
 @app.delete("/api/cuentas/{cuenta_id}")
 def eliminar_cuenta(cuenta_id: int, db: Session = Depends(get_db)):
-    """Elimina o desactiva la cuenta bancaria para mantener integridad fiscal."""
     cuenta = db.query(Cuenta).filter(Cuenta.id == cuenta_id).first()
     if not cuenta:
         raise HTTPException(status_code=404, detail="Cuenta no encontrada.")
 
-    # Marcar como inactiva (Soft-delete) para conservar historial fiscal de transacciones
     cuenta.activo = False
     db.commit()
-    return {"message": "Cuenta bancaria eliminada del catálogo activo con éxito."}
+    return {"message": "Cuenta bancaria eliminada con éxito."}
 
 
 # ====================================================================================================
-# 2. CATEGORÍAS & ENTIDADES (CLIENTES / PROVEEDORES / GASOLINERAS)
+# 2. CATEGORÍAS (CREACIÓN AL VUELO) & ENTIDADES
 # ====================================================================================================
 @app.get("/api/categorias", response_model=List[CategoriaResponse])
 def listar_categorias(tipo: Optional[str] = None, db: Session = Depends(get_db)):
@@ -271,10 +316,19 @@ def listar_categorias(tipo: Optional[str] = None, db: Session = Depends(get_db))
 
 @app.post("/api/categorias", response_model=CategoriaResponse)
 def crear_categoria(cat: CategoriaCreate, db: Session = Depends(get_db)):
-    existente = db.query(Categoria).filter(Categoria.nombre == cat.nombre).first()
+    """Permite crear categorías al vuelo (Papelería, Herramientas, Comida, etc.)."""
+    nombre_limpio = cat.nombre.strip()
+    existente = db.query(Categoria).filter(func.lower(Categoria.nombre) == func.lower(nombre_limpio)).first()
     if existente:
-        raise HTTPException(status_code=400, detail="Esta categoría ya existe.")
-    nueva = Categoria(**cat.model_dump())
+        return existente
+        
+    nueva = Categoria(
+        nombre=nombre_limpio,
+        tipo=cat.tipo,
+        tipo_entidad_sugerida=cat.tipo_entidad_sugerida or "GENERAL",
+        descripcion=cat.descripcion,
+        activo=True
+    )
     db.add(nueva)
     db.commit()
     db.refresh(nueva)
@@ -391,21 +445,24 @@ async def extraer_movimientos_pdf(
     movimientos = extract_movements_from_pdf(content, cuenta_id, existing_hashes)
 
     cats = db.query(Categoria).all()
-    gas_cat = next((c.id for c in cats if "GASOLINA" in c.nombre.upper()), None)
+    gas_cat = next((c.id for c in cats if "GASOLINA" in c.nombre.upper() or "DIESEL" in c.nombre.upper()), None)
     cli_cat = next((c.id for c in cats if "CLIENTE" in c.nombre.upper()), None)
     sat_cat = next((c.id for c in cats if "IMPUESTO" in c.nombre.upper() or "SAT" in c.nombre.upper()), None)
-    prov_cat = next((c.id for c in cats if "PROVEEDOR" in c.nombre.upper()), None)
+    cfe_cat = next((c.id for c in cats if "LUZ" in c.nombre.upper() or "CFE" in c.nombre.upper()), None)
+    tel_cat = next((c.id for c in cats if "TEL" in c.nombre.upper() or "INTERNET" in c.nombre.upper()), None)
 
     for m in movimientos:
         conc = m["concepto"].upper()
         if any(w in conc for w in ["GASOL", "COMBUSTIBLE", "HIDROCARB", "OXXO GAS", "PEMEX"]):
             m["categoria_id_sugerida"] = gas_cat
+        elif any(w in conc for w in ["CFE", "COMISION FEDERAL", "LUZ"]):
+            m["categoria_id_sugerida"] = cfe_cat
+        elif any(w in conc for w in ["TELCEL", "TELMEX", "TOTALPLAY", "AT&T", "INTERNET"]):
+            m["categoria_id_sugerida"] = tel_cat
         elif any(w in conc for w in ["SAT", "IMPUESTO", "TESORERIA", "IMSS"]):
             m["categoria_id_sugerida"] = sat_cat
         elif m["tipo"] == "ENTRADA":
             m["categoria_id_sugerida"] = cli_cat
-        elif m["tipo"] == "SALIDA":
-            m["categoria_id_sugerida"] = prov_cat
 
     return movimientos
 

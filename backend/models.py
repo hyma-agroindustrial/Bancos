@@ -2,6 +2,12 @@ from sqlalchemy import Column, Integer, String, Numeric, Boolean, Date, DateTime
 from sqlalchemy.orm import relationship
 from .database import Base
 
+class Configuracion(Base):
+    __tablename__ = "configuracion"
+
+    clave = Column(String(50), primary_key=True)
+    valor = Column(Text, nullable=False)
+
 class Usuario(Base):
     __tablename__ = "usuarios"
 

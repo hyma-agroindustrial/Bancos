@@ -3,6 +3,12 @@ from typing import Optional, List
 from datetime import date, datetime
 from decimal import Decimal
 
+# --- CONFIGURACION & BRANDING ---
+class ConfiguracionData(BaseModel):
+    nombre_sistema: str = Field(default="Consolidado de Bancos")
+    descripcion_sistema: str = Field(default="Sistema de Control de Gastos & Cuentas Fiscales")
+    logo_url: Optional[str] = Field(default="")
+
 # --- USUARIOS & PIN AUTH ---
 class UsuarioLogin(BaseModel):
     username: str = Field(..., max_length=50)
