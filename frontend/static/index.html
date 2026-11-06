@@ -205,7 +205,7 @@
                             <select x-model="form.cuenta_id" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500">
                                 <option value="">Selecciona cuenta...</option>
                                 <template x-for="cta in cuentas" :key="cta.id">
-                                    <option :value="cta.id" x-text="cta.nombre + ' (' + cta.banco + ')'"></option>
+                                    <option :value="cta.id" x-text="formatCuentaLabel(cta)"></option>
                                 </template>
                             </select>
                         </div>
@@ -312,7 +312,7 @@
                             <select x-model="pdfCuentaId" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
                                 <option value="">Selecciona cuenta...</option>
                                 <template x-for="cta in cuentas" :key="cta.id">
-                                    <option :value="cta.id" x-text="cta.nombre + ' (' + cta.banco + ')'"></option>
+                                    <option :value="cta.id" x-text="formatCuentaLabel(cta)"></option>
                                 </template>
                             </select>
                         </div>
@@ -390,7 +390,7 @@
                         <select x-model="filtros.cuenta_id" @change="filtrarTransacciones" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
                             <option value="">Todas las cuentas</option>
                             <template x-for="cta in cuentas" :key="cta.id">
-                                <option :value="cta.id" x-text="cta.nombre"></option>
+                                <option :value="cta.id" x-text="formatCuentaLabel(cta)"></option>
                             </template>
                         </select>
                     </div>
@@ -459,7 +459,13 @@
                             <template x-for="t in transacciones" :key="t.id">
                                 <tr class="hover:bg-slate-900/50">
                                     <td class="p-3 font-mono text-slate-400" x-text="t.fecha"></td>
-                                    <td class="p-3 font-semibold text-slate-200" x-text="t.cuenta_nombre"></td>
+                                    <td class="p-3">
+                                        <div class="font-bold text-white flex items-center gap-1.5">
+                                            <span class="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-400 border border-emerald-800/80" x-text="t.cuenta_banco || 'BANCO'"></span>
+                                            <span x-text="t.cuenta_nombre"></span>
+                                        </div>
+                                        <div class="text-[10px] font-mono text-slate-400" x-text="'No. ' + (t.cuenta_numero || '****')"></div>
+                                    </td>
                                     <td class="p-3 font-medium text-white max-w-sm truncate" x-text="t.concepto"></td>
                                     <td class="p-3">
                                         <span class="px-2 py-0.5 rounded text-[11px] bg-slate-800 text-slate-300 border border-slate-700" x-text="t.categoria_nombre || 'Sin Asignar'"></span>
@@ -499,8 +505,19 @@
                     <input type="text" x-model="configForm.descripcion_sistema" required placeholder="Sistema de Control de Gastos & Cuentas Fiscales" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
                 </div>
 
+                <!-- Subir Fotografía Directa desde PC o Celular -->
+                <div class="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-2">
+                    <label class="block text-xs font-semibold text-emerald-400">📷 Subir Fotografía o Logotipo</label>
+                    <input type="file" accept="image/*" @change="subirFotografiaLogo" class="w-full text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-500 cursor-pointer">
+                    <p class="text-[10px] text-slate-500">Importa directamente una foto desde tu equipo o galería del celular (PNG, JPG, WEBP).</p>
+                    <div x-show="config.logo_url" class="flex items-center gap-2 pt-1">
+                        <span class="text-[10px] text-slate-400">Logo actual:</span>
+                        <img :src="config.logo_url" class="w-8 h-8 object-contain rounded border border-slate-700 bg-slate-900 p-0.5">
+                    </div>
+                </div>
+
                 <div>
-                    <label class="block text-xs font-semibold text-slate-300 mb-1">URL de Logotipo o Imagen (Opcional)</label>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">O pegar URL de Imagen Externa (Opcional)</label>
                     <input type="url" x-model="configForm.logo_url" placeholder="https://miempresa.com/logo.png" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono">
                     <p class="text-[10px] text-slate-500 mt-1">Si lo dejas vacío, se mostrará el icono institucional predeterminado.</p>
                 </div>
@@ -802,6 +819,36 @@
                 abrirModalConfig() {
                     this.configForm = { ...this.config };
                     this.openModalConfiguracion = true;
+                },
+
+                async subirFotografiaLogo(event) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    try {
+                        const res = await fetch('/api/configuracion/upload-logo', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        if (res.ok) {
+                            const data = await res.json();
+                            this.config = data;
+                            this.configForm.logo_url = data.logo_url;
+                            alert('✅ Fotografía de logotipo subida y actualizada con éxito.');
+                        } else {
+                            const err = await res.json();
+                            alert(err.detail || 'Error al subir la imagen');
+                        }
+                    } catch (e) {
+                        alert('Error al subir la imagen');
+                    }
+                },
+
+                formatCuentaLabel(cta) {
+                    if (!cta) return '';
+                    const ultimos4 = cta.numero_cuenta ? cta.numero_cuenta.slice(-4) : '****';
+                    return `${cta.banco} · ${cta.nombre} (*${ultimos4})`;
                 },
 
                 async guardarConfiguracion() {

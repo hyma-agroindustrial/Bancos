@@ -141,6 +141,43 @@ def guardar_configuracion(data: ConfiguracionData, db: Session = Depends(get_db)
     db.commit()
     return data
 
+@app.post("/api/configuracion/upload-logo", response_model=ConfiguracionData)
+async def subir_fotografia_logo(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Permite subir una imagen o fotografía directamente desde la computadora o celular."""
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Archivo no proporcionado.")
+    
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in [".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif"]:
+        raise HTTPException(status_code=400, detail="Formato de imagen no soportado. Sube un archivo PNG, JPG o WEBP.")
+
+    uploads_dir = os.path.join(os.path.dirname(__file__), "..", "frontend", "static", "uploads")
+    os.makedirs(uploads_dir, exist_ok=True)
+
+    clean_filename = f"logo_{secrets.token_hex(4)}{ext}"
+    file_path = os.path.join(uploads_dir, clean_filename)
+
+    content = await file.read()
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    logo_url = f"/static/uploads/{clean_filename}"
+
+    row = db.query(Configuracion).filter(Configuracion.clave == "logo_url").first()
+    if row:
+        row.valor = logo_url
+    else:
+        db.add(Configuracion(clave="logo_url", valor=logo_url))
+    db.commit()
+
+    cfg_rows = db.query(Configuracion).all()
+    cfg_dict = {r.clave: r.valor for r in cfg_rows}
+    return ConfiguracionData(
+        nombre_sistema=cfg_dict.get("nombre_sistema", "Consolidado de Bancos"),
+        descripcion_sistema=cfg_dict.get("descripcion_sistema", "Sistema de Control de Gastos & Cuentas Fiscales"),
+        logo_url=logo_url
+    )
+
 
 # ====================================================================================================
 # 0. CONTROL DE ACCESO (USUARIO + PIN) PARA ACCESO DESDE CUALQUIER DISPOSITIVO
@@ -392,6 +429,8 @@ def listar_transacciones(
     for t in transacciones:
         tr_dict = TransaccionResponse.model_validate(t)
         tr_dict.cuenta_nombre = t.cuenta.nombre if t.cuenta else None
+        tr_dict.cuenta_banco = t.cuenta.banco if t.cuenta else None
+        tr_dict.cuenta_numero = t.cuenta.numero_cuenta if t.cuenta else None
         tr_dict.categoria_nombre = t.categoria.nombre if t.categoria else None
         tr_dict.entidad_nombre = t.entidad.nombre if t.entidad else None
         resultado.append(tr_dict)
@@ -411,6 +450,8 @@ def crear_transaccion_manual(trans: TransaccionCreate, db: Session = Depends(get
 
     tr_dict = TransaccionResponse.model_validate(nueva)
     tr_dict.cuenta_nombre = cuenta.nombre
+    tr_dict.cuenta_banco = cuenta.banco
+    tr_dict.cuenta_numero = cuenta.numero_cuenta
     tr_dict.categoria_nombre = nueva.categoria.nombre if nueva.categoria else None
     tr_dict.entidad_nombre = nueva.entidad.nombre if nueva.entidad else None
     return tr_dict

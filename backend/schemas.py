@@ -159,6 +159,8 @@ class TransaccionResponse(TransaccionBase):
     origen: str
     archivo_fuente: Optional[str]
     cuenta_nombre: Optional[str] = None
+    cuenta_banco: Optional[str] = None
+    cuenta_numero: Optional[str] = None
     categoria_nombre: Optional[str] = None
     entidad_nombre: Optional[str] = None
     created_at: Optional[datetime] = None
