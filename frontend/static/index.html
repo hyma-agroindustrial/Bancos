@@ -28,6 +28,52 @@
     </script>
     <style>
         [x-cloak] { display: none !important; }
+
+        @media print {
+            body {
+                background: #ffffff !important;
+                color: #0f172a !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            header, .no-print, button, select, input, .fixed {
+                display: none !important;
+            }
+            main {
+                max-width: 100% !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            .print-document {
+                background: #ffffff !important;
+                color: #0f172a !important;
+                border: none !important;
+                box-shadow: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                width: 100% !important;
+            }
+            .print-card {
+                background: #f8fafc !important;
+                border: 1px solid #cbd5e1 !important;
+                color: #0f172a !important;
+            }
+            .print-table th {
+                background: #f1f5f9 !important;
+                color: #0f172a !important;
+                border-bottom: 2px solid #94a3b8 !important;
+            }
+            .print-table td {
+                color: #0f172a !important;
+                border-bottom: 1px solid #e2e8f0 !important;
+            }
+            .print-dark-text {
+                color: #0f172a !important;
+            }
+            .print-muted-text {
+                color: #64748b !important;
+            }
+        }
     </style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased" x-data="agroApp()" x-init="initApp()" x-cloak>
@@ -79,7 +125,7 @@
     </div>
 
     <!-- NAVBAR SUPERIOR CON ENCABEZADO EDITABLE -->
-    <header class="bg-slate-950 border-b border-slate-800 sticky top-0 z-40">
+    <header class="bg-slate-950 border-b border-slate-800 sticky top-0 z-40 no-print">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex justify-between items-center">
             
             <!-- ENCABEZADO MODIFICABLE (LOGO, NOMBRE, DESCRIPCIÓN) -->
@@ -141,7 +187,7 @@
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-6">
 
         <!-- 1. RESUMEN DE CUENTAS BANCARIAS (MODIFICAR & ELIMINAR) -->
-        <section>
+        <section class="no-print">
             <div class="flex justify-between items-center mb-3">
                 <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400">Cuentas Bancarias Registradas</h2>
                 <span class="text-xs text-slate-500 font-mono" x-text="cuentas.length + ' cuenta(s) activa(s)'"></span>
@@ -187,8 +233,8 @@
         </section>
 
         <!-- 2. PESTAÑAS PRINCIPALES -->
-        <section class="bg-slate-950 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
-            <div class="border-b border-slate-800 bg-slate-900/60 px-4 flex space-x-2 sm:space-x-4 overflow-x-auto">
+        <section class="bg-slate-950 border border-slate-800 rounded-2xl shadow-xl overflow-hidden print-document">
+            <div class="border-b border-slate-800 bg-slate-900/60 px-4 flex space-x-2 sm:space-x-4 overflow-x-auto no-print">
                 <button @click="activeTab = 'manual'" :class="activeTab === 'manual' ? 'border-emerald-500 text-emerald-400 font-bold' : 'border-transparent text-slate-400 hover:text-slate-200'" class="py-3 px-2 sm:px-3 border-b-2 text-xs sm:text-sm flex items-center gap-1.5 whitespace-nowrap transition">
                     <span>✍️</span> <span>Captura Manual</span>
                 </button>
@@ -197,6 +243,9 @@
                 </button>
                 <button @click="activeTab = 'reportes'" :class="activeTab === 'reportes' ? 'border-emerald-500 text-emerald-400 font-bold' : 'border-transparent text-slate-400 hover:text-slate-200'" class="py-3 px-2 sm:px-3 border-b-2 text-xs sm:text-sm flex items-center gap-1.5 whitespace-nowrap transition">
                     <span>📊</span> <span>Reportes & Movimientos</span>
+                </button>
+                <button @click="activeTab = 'corte'; if(!datosEstadoCuenta) generarEstadoCuenta();" :class="activeTab === 'corte' ? 'border-emerald-500 text-emerald-400 font-bold' : 'border-transparent text-slate-400 hover:text-slate-200'" class="py-3 px-2 sm:px-3 border-b-2 text-xs sm:text-sm flex items-center gap-1.5 whitespace-nowrap transition">
+                    <span>🏛️</span> <span>Corte de Mes (Estado de Cuenta)</span>
                 </button>
             </div>
 
@@ -506,6 +555,222 @@
                             </tr>
                         </tbody>
                     </table>
+                </div>
+            </div>
+
+            <!-- TAB 4: ESTADO DE CUENTA / CORTE MENSUAL (FORMATO BANCARIO) -->
+            <div x-show="activeTab === 'corte'" class="p-4 sm:p-6 space-y-6">
+                <!-- BARRA DE PARÁMETROS DEL CORTE (NO PRINT) -->
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4 no-print">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1">
+                        <!-- Cuenta Bancaria -->
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-400 mb-1">Cuenta Bancaria *</label>
+                            <select x-model="corteCuentaId" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                                <template x-for="cta in cuentas" :key="cta.id">
+                                    <option :value="cta.id" x-text="formatCuentaLabel(cta)"></option>
+                                </template>
+                            </select>
+                        </div>
+
+                        <!-- Mes del Corte -->
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-400 mb-1">Mes del Corte *</label>
+                            <select x-model="corteMes" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                                <option value="1">Enero</option>
+                                <option value="2">Febrero</option>
+                                <option value="3">Marzo</option>
+                                <option value="4">Abril</option>
+                                <option value="5">Mayo</option>
+                                <option value="6">Junio</option>
+                                <option value="7">Julio</option>
+                                <option value="8">Agosto</option>
+                                <option value="9">Septiembre</option>
+                                <option value="10">Octubre</option>
+                                <option value="11">Noviembre</option>
+                                <option value="12">Diciembre</option>
+                            </select>
+                        </div>
+
+                        <!-- Año del Corte -->
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-400 mb-1">Año *</label>
+                            <select x-model="corteAnio" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono">
+                                <option value="2024">2024</option>
+                                <option value="2025">2025</option>
+                                <option value="2026">2026</option>
+                                <option value="2027">2027</option>
+                                <option value="2028">2028</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Botones Generar e Imprimir -->
+                    <div class="flex items-center space-x-2 pt-2 md:pt-0">
+                        <button @click="generarEstadoCuenta()" :disabled="loadingCorte" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-md">
+                            <span x-show="loadingCorte">⏳</span>
+                            <span>🔍 Generar Corte</span>
+                        </button>
+                        <button x-show="datosEstadoCuenta" @click="imprimirEstadoCuenta()" class="bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 font-bold text-xs px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-md">
+                            <span>🖨️</span>
+                            <span>Imprimir / Guardar PDF</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- CONTENEDOR DEL DOCUMENTO OFICIAL DE CORTE / ESTADO DE CUENTA -->
+                <div x-show="datosEstadoCuenta" class="bg-slate-950 border border-slate-800 rounded-2xl p-6 sm:p-8 space-y-6 shadow-2xl print-document">
+                    
+                    <!-- ENCABEZADO INSTITUCIONAL MEMBRETADO -->
+                    <div class="border-b border-slate-800 pb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <div class="flex items-center space-x-4">
+                            <template x-if="config.logo_url">
+                                <img :src="config.logo_url" alt="Logo" class="w-14 h-14 object-contain rounded-xl border border-slate-800 p-1 bg-slate-900">
+                            </template>
+                            <template x-if="!config.logo_url">
+                                <div class="w-14 h-14 rounded-xl bg-emerald-600 flex items-center justify-center font-bold text-2xl text-white shadow-lg">
+                                    🏛️
+                                </div>
+                            </template>
+                            <div>
+                                <h2 class="text-lg sm:text-xl font-black text-white tracking-wide uppercase print-dark-text" x-text="config.nombre_sistema || 'HYMA AGROINDUSTRIAL'"></h2>
+                                <p class="text-xs text-slate-400 print-muted-text">Sistema de Control de Gastos & Cuentas Fiscales</p>
+                                <p class="text-[11px] font-mono text-emerald-400 font-semibold print-dark-text mt-0.5">RFC: HAG161013U20</p>
+                            </div>
+                        </div>
+
+                        <div class="text-left md:text-right">
+                            <span class="inline-block px-3 py-1 rounded-full text-xs font-black tracking-wider uppercase bg-emerald-950 text-emerald-400 border border-emerald-800/80 mb-1 print-card">
+                                ESTADO DE CUENTA / CORTE MENSUAL
+                            </span>
+                            <div class="text-xs text-slate-300 font-mono print-dark-text" x-text="'Periodo: Del ' + (datosEstadoCuenta ? datosEstadoCuenta.periodo.fecha_inicio : '') + ' al ' + (datosEstadoCuenta ? datosEstadoCuenta.periodo.fecha_fin : '')"></div>
+                            <div class="text-[10px] text-slate-500 font-mono print-muted-text" x-text="'Mes: ' + (datosEstadoCuenta ? datosEstadoCuenta.periodo.mes_nombre : '') + ' ' + (datosEstadoCuenta ? datosEstadoCuenta.periodo.anio : '')"></div>
+                        </div>
+                    </div>
+
+                    <!-- FICHA TÉCNICA DE LA CUENTA BANCARIA -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-900/60 p-4 rounded-xl border border-slate-800 print-card text-xs">
+                        <div>
+                            <span class="text-[10px] uppercase font-bold text-slate-400 block print-muted-text">Institución Bancaria</span>
+                            <span class="font-bold text-white text-sm print-dark-text" x-text="datosEstadoCuenta ? datosEstadoCuenta.cuenta.banco : ''"></span>
+                        </div>
+                        <div>
+                            <span class="text-[10px] uppercase font-bold text-slate-400 block print-muted-text">Nombre de la Cuenta</span>
+                            <span class="font-bold text-white print-dark-text" x-text="datosEstadoCuenta ? datosEstadoCuenta.cuenta.nombre : ''"></span>
+                        </div>
+                        <div>
+                            <span class="text-[10px] uppercase font-bold text-slate-400 block print-muted-text">No. Cuenta / CLABE</span>
+                            <span class="font-mono text-white print-dark-text" x-text="(datosEstadoCuenta ? datosEstadoCuenta.cuenta.numero_cuenta : '') + ' / ' + (datosEstadoCuenta ? datosEstadoCuenta.cuenta.clabe : '')"></span>
+                        </div>
+                        <div>
+                            <span class="text-[10px] uppercase font-bold text-slate-400 block print-muted-text">Moneda</span>
+                            <span class="font-bold text-emerald-400 font-mono print-dark-text" x-text="(datosEstadoCuenta ? datosEstadoCuenta.cuenta.moneda : 'MXN') + ' - Pesos Mexicanos'"></span>
+                        </div>
+                    </div>
+
+                    <!-- CUADRO RESUMEN DEL CORTE (BALANCE CUADRADO) -->
+                    <div>
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5 print-dark-text">Resumen del Periodo</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                            <!-- Saldo Inicial -->
+                            <div class="bg-slate-900/90 border border-slate-800 p-3.5 rounded-xl print-card">
+                                <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wide block print-muted-text">Saldo Inicial al 1° del Mes</span>
+                                <div class="text-base font-black font-mono text-white mt-1 print-dark-text" x-text="datosEstadoCuenta ? formatMoney(datosEstadoCuenta.resumen.saldo_inicial) : '$0.00'"></div>
+                                <span class="text-[10px] text-slate-500 mt-0.5 block print-muted-text">Corte del mes anterior</span>
+                            </div>
+
+                            <!-- Total Depósitos (Abonos) -->
+                            <div class="bg-slate-900/90 border border-emerald-900/40 p-3.5 rounded-xl print-card">
+                                <span class="text-[10px] font-semibold text-emerald-400 uppercase tracking-wide block print-dark-text">(+) Total Depósitos / Abonos</span>
+                                <div class="text-base font-black font-mono text-emerald-400 mt-1 print-dark-text" x-text="datosEstadoCuenta ? formatMoney(datosEstadoCuenta.resumen.total_entradas) : '$0.00'"></div>
+                                <span class="text-[10px] text-slate-500 mt-0.5 block print-muted-text" x-text="(datosEstadoCuenta ? datosEstadoCuenta.resumen.conteo_entradas : 0) + ' movimiento(s)'"></span>
+                            </div>
+
+                            <!-- Total Retiros (Cargos) -->
+                            <div class="bg-slate-900/90 border border-rose-900/40 p-3.5 rounded-xl print-card">
+                                <span class="text-[10px] font-semibold text-rose-400 uppercase tracking-wide block print-dark-text">(-) Total Retiros / Cargos</span>
+                                <div class="text-base font-black font-mono text-rose-400 mt-1 print-dark-text" x-text="datosEstadoCuenta ? formatMoney(datosEstadoCuenta.resumen.total_salidas) : '$0.00'"></div>
+                                <span class="text-[10px] text-slate-500 mt-0.5 block print-muted-text" x-text="(datosEstadoCuenta ? datosEstadoCuenta.resumen.conteo_salidas : 0) + ' movimiento(s)'"></span>
+                            </div>
+
+                            <!-- Saldo Final al Corte -->
+                            <div class="bg-slate-900/90 border border-slate-800 p-3.5 rounded-xl print-card">
+                                <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wide block print-muted-text">(=) Saldo Final al Corte</span>
+                                <div class="text-base font-black font-mono mt-1 print-dark-text" :class="datosEstadoCuenta && datosEstadoCuenta.resumen.saldo_final >= 0 ? 'text-emerald-400' : 'text-rose-400'" x-text="datosEstadoCuenta ? formatMoney(datosEstadoCuenta.resumen.saldo_final) : '$0.00'"></div>
+                                <span class="text-[10px] text-slate-500 mt-0.5 block print-muted-text" x-text="'Al último día del mes'"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TABLA DETALLE DE MOVIMIENTOS CON SALDO PROGRESIVO -->
+                    <div>
+                        <div class="flex justify-between items-center mb-2.5">
+                            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 print-dark-text">
+                                Detalle de Movimientos en el Periodo (<span x-text="datosEstadoCuenta ? datosEstadoCuenta.movimientos.length : 0"></span>)
+                            </h3>
+                            <span class="text-[11px] text-slate-500 font-mono print-muted-text">Orden cronológico bancario</span>
+                        </div>
+
+                        <div class="overflow-x-auto border border-slate-800 rounded-xl print-card">
+                            <table class="w-full text-left text-xs print-table">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-semibold text-[10px]">
+                                    <tr>
+                                        <th class="p-2.5 text-center">Fecha</th>
+                                        <th class="p-2.5">Concepto / Detalle</th>
+                                        <th class="p-2.5">Categoría Fiscal</th>
+                                        <th class="p-2.5">Cliente / Proveedor</th>
+                                        <th class="p-2.5 text-right text-emerald-400 print-dark-text">Depósito (+)</th>
+                                        <th class="p-2.5 text-right text-rose-400 print-dark-text">Retiro (-)</th>
+                                        <th class="p-2.5 text-right">Saldo Resultante</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800/80">
+                                    <template x-for="m in (datosEstadoCuenta ? datosEstadoCuenta.movimientos : [])" :key="m.id">
+                                        <tr class="hover:bg-slate-900/50">
+                                            <td class="p-2.5 font-mono text-center text-slate-400 print-dark-text whitespace-nowrap" x-text="m.fecha"></td>
+                                            <td class="p-2.5 font-medium text-white print-dark-text max-w-sm">
+                                                <div x-text="m.concepto"></div>
+                                                <div x-show="m.referencia" class="text-[10px] font-mono text-slate-500 print-muted-text" x-text="'Ref: ' + m.referencia"></div>
+                                            </td>
+                                            <td class="p-2.5">
+                                                <span class="px-2 py-0.5 rounded text-[10px] bg-slate-900 text-slate-300 border border-slate-700/80 whitespace-nowrap print-card" x-text="m.categoria_nombre"></span>
+                                            </td>
+                                            <td class="p-2.5 text-emerald-400 print-dark-text" x-text="m.entidad_nombre || '-'"></td>
+                                            <td class="p-2.5 text-right font-mono font-bold text-emerald-400 print-dark-text" x-text="m.abono ? ('+' + formatMoney(m.abono)) : '-'"></td>
+                                            <td class="p-2.5 text-right font-mono font-bold text-rose-400 print-dark-text" x-text="m.cargo ? ('-' + formatMoney(m.cargo)) : '-'"></td>
+                                            <td class="p-2.5 text-right font-mono font-bold text-white print-dark-text" x-text="formatMoney(m.saldo_resultante)"></td>
+                                        </tr>
+                                    </template>
+                                    <tr x-show="!datosEstadoCuenta || datosEstadoCuenta.movimientos.length === 0">
+                                        <td colspan="7" class="p-6 text-center text-slate-500">No se registraron movimientos bancarios en el mes seleccionado.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- DESGLOSE FISCAL POR CATEGORÍAS -->
+                    <div x-show="datosEstadoCuenta && datosEstadoCuenta.desglose_categorias.length > 0" class="pt-4 border-t border-slate-800">
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5 print-dark-text">Concentrado Fiscal por Categorías</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                            <template x-for="cat in (datosEstadoCuenta ? datosEstadoCuenta.desglose_categorias : [])" :key="cat.categoria">
+                                <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800 flex justify-between items-center text-xs print-card">
+                                    <div>
+                                        <div class="font-bold text-white print-dark-text" x-text="cat.categoria"></div>
+                                        <div class="text-[10px] text-slate-500 print-muted-text" x-text="cat.conteo + ' movimiento(s) · ' + cat.tipo"></div>
+                                    </div>
+                                    <div class="text-right font-mono font-bold" :class="cat.tipo === 'ENTRADA' ? 'text-emerald-400' : 'text-rose-400'" x-text="formatMoney(cat.total)"></div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- PIE DE PÁGINA DEL REPORTE -->
+                    <div class="pt-6 border-t border-slate-800 flex flex-col sm:flex-row justify-between items-center text-[11px] text-slate-500 font-mono print-muted-text">
+                        <div>Documento emitido por el Sistema de Control de Gastos & Cuentas Fiscales.</div>
+                        <div x-text="'Generado: ' + new Date().toLocaleDateString('es-MX') + ' ' + new Date().toLocaleTimeString('es-MX')"></div>
+                    </div>
+
                 </div>
             </div>
         </section>
@@ -1018,6 +1283,11 @@
                 openModalCatalogos: false,
                 catalogoTab: 'categorias',
                 filtroCatalogo: '',
+                corteCuentaId: '',
+                corteMes: new Date().getMonth() + 1,
+                corteAnio: new Date().getFullYear(),
+                datosEstadoCuenta: null,
+                loadingCorte: false,
                 cuentaEnEdicion: null,
                 categoriaEnEdicion: { id: null, nombre: '', tipo: 'SALIDA', tipo_entidad_sugerida: 'GENERAL', descripcion: '' },
                 entidadEnEdicion: { id: null, nombre: '', tipo_entidad: 'PROVEEDOR', rfc: '' },
@@ -1220,6 +1490,7 @@
                         if (this.cuentas.length > 0 && !this.form.cuenta_id) {
                             this.form.cuenta_id = this.cuentas[0].id;
                             this.pdfCuentaId = this.cuentas[0].id;
+                            this.corteCuentaId = this.cuentas[0].id;
                         }
                     }
                 },
@@ -1780,6 +2051,31 @@
                     } finally {
                         this.loading = false;
                     }
+                },
+
+                async generarEstadoCuenta() {
+                    if (!this.corteCuentaId && this.cuentas.length > 0) {
+                        this.corteCuentaId = this.cuentas[0].id;
+                    }
+                    if (!this.corteCuentaId) return;
+                    this.loadingCorte = true;
+                    try {
+                        const res = await fetch(`/api/reportes/estado-cuenta?cuenta_id=${this.corteCuentaId}&mes=${this.corteMes}&anio=${this.corteAnio}`);
+                        if (res.ok) {
+                            this.datosEstadoCuenta = await res.json();
+                        } else {
+                            const err = await res.json();
+                            alert(err.detail || 'Error al generar corte de mes');
+                        }
+                    } catch (e) {
+                        alert('Error al conectar con el servidor.');
+                    } finally {
+                        this.loadingCorte = false;
+                    }
+                },
+
+                imprimirEstadoCuenta() {
+                    window.print();
                 },
 
                 formatMoney(amount) {

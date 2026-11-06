@@ -1,6 +1,9 @@
 import os
 import hashlib
 import secrets
+import calendar
+from datetime import datetime, date
+from decimal import Decimal
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Query, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -731,6 +734,140 @@ def reporte_financiero_global(
         "total_entradas": total_entradas,
         "total_salidas": total_salidas,
         "balance_periodo": balance_periodo
+    }
+
+NOMBRE_MESES = {
+    1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril",
+    5: "Mayo", 6: "Junio", 7: "Julio", 8: "Agosto",
+    9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
+}
+
+@app.get("/api/reportes/estado-cuenta")
+def generar_estado_cuenta_mensual(
+    cuenta_id: int,
+    mes: int = Query(..., ge=1, le=12),
+    anio: int = Query(..., ge=2000, le=2100),
+    db: Session = Depends(get_db)
+):
+    """
+    Genera un Estado de Cuenta Oficial / Corte Mensual al estilo bancario (Banorte, Scotiabank, BBVA)
+    con Saldo Inicial acumulado al 1° del mes, saldo progresivo renglón por renglón,
+    cuadro de balance cuadrado y desglose fiscal por categorías.
+    """
+    cuenta = db.query(Cuenta).filter(Cuenta.id == cuenta_id).first()
+    if not cuenta:
+        raise HTTPException(status_code=404, detail="Cuenta bancaria no encontrada.")
+
+    # 1. Determinar rango exacto del mes
+    last_day = calendar.monthrange(anio, mes)[1]
+    fecha_inicio = date(anio, mes, 1)
+    fecha_fin = date(anio, mes, last_day)
+
+    # 2. Calcular Saldo Inicial Histórico al 1° del mes:
+    # Saldo Inicial = Saldo Base Registrado + Sum(Entradas previas) - Sum(Salidas previas)
+    entradas_previas = db.query(func.coalesce(func.sum(Transaccion.monto), 0)).filter(
+        Transaccion.cuenta_id == cuenta_id,
+        Transaccion.tipo == "ENTRADA",
+        Transaccion.fecha < fecha_inicio
+    ).scalar()
+
+    salidas_previas = db.query(func.coalesce(func.sum(Transaccion.monto), 0)).filter(
+        Transaccion.cuenta_id == cuenta_id,
+        Transaccion.tipo == "SALIDA",
+        Transaccion.fecha < fecha_inicio
+    ).scalar()
+
+    saldo_inicial_periodo = Decimal(str(cuenta.saldo_inicial)) + Decimal(str(entradas_previas)) - Decimal(str(salidas_previas))
+
+    # 3. Obtener movimientos del mes ordenados cronológicamente
+    transacciones_mes = db.query(Transaccion).filter(
+        Transaccion.cuenta_id == cuenta_id,
+        Transaccion.fecha >= fecha_inicio,
+        Transaccion.fecha <= fecha_fin
+    ).order_by(Transaccion.fecha.asc(), Transaccion.id.asc()).all()
+
+    # 4. Calcular Saldo Progresivo acumulado renglón por renglón
+    saldo_acumulado = saldo_inicial_periodo
+    movimientos_formateados = []
+    total_entradas = Decimal("0.00")
+    total_salidas = Decimal("0.00")
+    conteo_entradas = 0
+    conteo_salidas = 0
+
+    # Categorización agrupada para el resumen fiscal
+    desglose_cat_dict = {}
+
+    for t in transacciones_mes:
+        monto = Decimal(str(t.monto))
+        if t.tipo == "ENTRADA":
+            saldo_acumulado += monto
+            total_entradas += monto
+            conteo_entradas += 1
+        else:
+            saldo_acumulado -= monto
+            total_salidas += monto
+            conteo_salidas += 1
+
+        cat_nombre = t.categoria.nombre if t.categoria else "Sin Asignar"
+        ent_nombre = t.entidad.nombre if t.entidad else None
+
+        if cat_nombre not in desglose_cat_dict:
+            desglose_cat_dict[cat_nombre] = {
+                "categoria": cat_nombre,
+                "tipo": t.tipo,
+                "total": Decimal("0.00"),
+                "conteo": 0
+            }
+        desglose_cat_dict[cat_nombre]["total"] += monto
+        desglose_cat_dict[cat_nombre]["conteo"] += 1
+
+        movimientos_formateados.append({
+            "id": t.id,
+            "fecha": t.fecha.isoformat(),
+            "concepto": t.concepto,
+            "referencia": t.referencia,
+            "categoria_nombre": cat_nombre,
+            "entidad_nombre": ent_nombre,
+            "tipo": t.tipo,
+            "monto": monto,
+            "abono": monto if t.tipo == "ENTRADA" else None,
+            "cargo": monto if t.tipo == "SALIDA" else None,
+            "saldo_resultante": saldo_acumulado
+        })
+
+    saldo_final_periodo = saldo_acumulado
+
+    # Ordenar desglose de categorías por mayor monto
+    desglose_categorias = sorted(list(desglose_cat_dict.values()), key=lambda x: x["total"], reverse=True)
+
+    return {
+        "cuenta": {
+            "id": cuenta.id,
+            "nombre": cuenta.nombre,
+            "banco": cuenta.banco,
+            "clabe": cuenta.clabe,
+            "numero_cuenta": cuenta.numero_cuenta,
+            "moneda": cuenta.moneda
+        },
+        "periodo": {
+            "mes": mes,
+            "mes_nombre": NOMBRE_MESES.get(mes, ""),
+            "anio": anio,
+            "fecha_inicio": fecha_inicio.isoformat(),
+            "fecha_fin": fecha_fin.isoformat()
+        },
+        "resumen": {
+            "saldo_inicial": saldo_inicial_periodo,
+            "total_entradas": total_entradas,
+            "conteo_entradas": conteo_entradas,
+            "total_salidas": total_salidas,
+            "conteo_salidas": conteo_salidas,
+            "variacion_neta": total_entradas - total_salidas,
+            "saldo_final": saldo_final_periodo,
+            "total_movimientos": len(transacciones_mes)
+        },
+        "movimientos": movimientos_formateados,
+        "desglose_categorias": desglose_categorias
     }
 
 # Montar frontend estático
