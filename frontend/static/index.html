@@ -259,7 +259,7 @@
                             </div>
 
                             <select x-model="form.entidad_id" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500">
-                                <option value="">Selecciona <span x-text="labelEntidadDinamica"></span>...</option>
+                                <option value="">(Ninguno / Opcional)</option>
                                 <template x-for="ent in entidadesFiltradas" :key="ent.id">
                                     <option :value="ent.id" x-text="ent.nombre + (ent.rfc ? ' (' + ent.rfc + ')' : '')"></option>
                                 </template>
@@ -914,34 +914,34 @@
                 onTipoChange() {
                     this.form.categoria_id = '';
                     this.form.entidad_id = '';
-                    this.labelEntidadDinamica = 'Cliente / Proveedor';
+                    this.labelEntidadDinamica = 'Beneficiario / Proveedor (Opcional)';
                 },
 
                 onCategoriaChange() {
                     const cat = this.categorias.find(c => c.id == this.form.categoria_id);
                     if (!cat) {
-                        this.labelEntidadDinamica = 'Cliente / Proveedor';
+                        this.labelEntidadDinamica = 'Beneficiario / Proveedor (Opcional)';
                         return;
                     }
                     if (cat.tipo_entidad_sugerida === 'CLIENTE') {
-                        this.labelEntidadDinamica = 'Cliente Comprador *';
+                        this.labelEntidadDinamica = 'Cliente que pagó (Opcional)';
                         this.labelModalEntidad = 'Cliente';
                         this.modalEntidad.tipo_entidad = 'CLIENTE';
                     } else if (cat.tipo_entidad_sugerida === 'GASOLINERA') {
-                        this.labelEntidadDinamica = 'Gasolinera / Estación *';
+                        this.labelEntidadDinamica = 'Gasolinera / Estación (Opcional)';
                         this.labelModalEntidad = 'Gasolinera';
                         this.modalEntidad.tipo_entidad = 'GASOLINERA';
                     } else if (cat.tipo_entidad_sugerida === 'PROVEEDOR') {
-                        this.labelEntidadDinamica = 'Proveedor / Comercio *';
+                        this.labelEntidadDinamica = 'Proveedor / Empresa (Opcional)';
                         this.labelModalEntidad = 'Proveedor';
                         this.modalEntidad.tipo_entidad = 'PROVEEDOR';
                     } else if (cat.tipo_entidad_sugerida === 'EMPLEADO') {
-                        this.labelEntidadDinamica = 'Empleado / Jornalero *';
+                        this.labelEntidadDinamica = 'Empleado / Chofer (Opcional)';
                         this.labelModalEntidad = 'Empleado';
                         this.modalEntidad.tipo_entidad = 'EMPLEADO';
                     } else {
-                        this.labelEntidadDinamica = 'Tercero Relacionado';
-                        this.labelModalEntidad = 'Entidad';
+                        this.labelEntidadDinamica = 'Beneficiario / Empresa (Opcional)';
+                        this.labelModalEntidad = 'Beneficiario';
                         this.modalEntidad.tipo_entidad = 'GENERAL';
                     }
                 },
@@ -1083,21 +1083,41 @@
                 async guardarTransaccionManual() {
                     this.loading = true;
                     try {
+                        const payload = {
+                            cuenta_id: parseInt(this.form.cuenta_id),
+                            categoria_id: this.form.categoria_id ? parseInt(this.form.categoria_id) : null,
+                            entidad_id: this.form.entidad_id ? parseInt(this.form.entidad_id) : null,
+                            fecha: this.form.fecha,
+                            tipo: this.form.tipo,
+                            monto: parseFloat(this.form.monto),
+                            concepto: this.form.concepto,
+                            referencia: this.form.referencia || null
+                        };
+
                         const res = await fetch('/api/transacciones', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(this.form)
+                            body: JSON.stringify(payload)
                         });
                         if (res.ok) {
                             alert('✅ Movimiento registrado con éxito.');
                             this.form.monto = '';
                             this.form.concepto = '';
                             this.form.referencia = '';
+                            this.form.entidad_id = '';
                             await this.cargarCuentas();
                             await this.filtrarTransacciones();
                         } else {
                             const err = await res.json();
-                            alert(err.detail || 'Error al registrar.');
+                            let msg = 'Error al registrar.';
+                            if (typeof err.detail === 'string') {
+                                msg = err.detail;
+                            } else if (Array.isArray(err.detail)) {
+                                msg = err.detail.map(d => d.msg || JSON.stringify(d)).join('\n');
+                            } else if (err.detail && typeof err.detail === 'object') {
+                                msg = JSON.stringify(err.detail);
+                            }
+                            alert(msg);
                         }
                     } finally {
                         this.loading = false;

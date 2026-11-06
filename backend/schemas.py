@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional, List
+from typing import Optional, List, Any
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -138,6 +138,16 @@ class TransaccionBase(BaseModel):
     monto: Decimal = Field(..., gt=0)
     concepto: str
     referencia: Optional[str] = None
+
+    @field_validator("categoria_id", "entidad_id", mode="before")
+    @classmethod
+    def parse_optional_id(cls, v: Any) -> Optional[int]:
+        if v == "" or v is None or v == "null":
+            return None
+        try:
+            return int(v)
+        except (ValueError, TypeError):
+            return None
 
 class TransaccionCreate(TransaccionBase):
     origen: Optional[str] = "MANUAL"
