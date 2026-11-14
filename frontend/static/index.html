@@ -2335,6 +2335,80 @@
         </div>
     </div>
 
+    <!-- PANEL LATERAL RÁPIDO DE AVISOS Y CONFIRMACIONES (A UN COSTADO, NO ARRIBA) -->
+    <!-- 1. Aviso / Notificación Lateral (Reemplaza window.alert) -->
+    <div x-show="avisoLateral.visible"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 translate-x-8"
+         x-transition:enter-end="opacity-100 translate-x-0"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100 translate-x-0"
+         x-transition:leave-end="opacity-0 translate-x-8"
+         class="fixed right-4 sm:right-6 top-1/2 -translate-y-1/2 z-[9999] w-80 sm:w-96 max-w-[92vw] no-print"
+         x-cloak>
+        <div class="bg-slate-900 border-2 rounded-2xl p-5 shadow-2xl space-y-3"
+             :class="avisoLateral.tipo === 'error' ? 'border-rose-500' : (avisoLateral.tipo === 'warning' ? 'border-amber-500' : 'border-emerald-500')">
+            <div class="flex items-start justify-between gap-3">
+                <div class="flex items-start gap-3">
+                    <div class="w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0 font-bold"
+                         :class="avisoLateral.tipo === 'error' ? 'bg-rose-950 text-rose-400' : (avisoLateral.tipo === 'warning' ? 'bg-amber-950 text-amber-300' : 'bg-emerald-950 text-emerald-400')">
+                        <span x-text="avisoLateral.tipo === 'error' ? '❌' : (avisoLateral.tipo === 'warning' ? '⚠️' : '✅')"></span>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-black text-white uppercase tracking-wide"
+                            x-text="avisoLateral.tipo === 'error' ? 'Atención' : (avisoLateral.tipo === 'warning' ? 'Aviso del Sistema' : 'Confirmación')"></h4>
+                        <p class="text-sm text-slate-200 font-medium whitespace-pre-line mt-1 leading-snug" x-text="avisoLateral.mensaje"></p>
+                    </div>
+                </div>
+                <button type="button" @click="cerrarAvisoLateral()" class="text-slate-400 hover:text-white text-sm font-bold px-1.5">✕</button>
+            </div>
+            <div class="flex items-center justify-between pt-2 border-t border-slate-800">
+                <span class="text-[11px] text-slate-400" x-show="avisoLateral.tipo === 'success'">Se cierra solo automáticamente...</span>
+                <span class="text-[11px] text-slate-400" x-show="avisoLateral.tipo !== 'success'">Presiona Aceptar para continuar</span>
+                <button type="button"
+                        @click="cerrarAvisoLateral()"
+                        class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-5 py-2 rounded-xl shadow-md transition">
+                    Aceptar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Ventana de Confirmación Lateral (Reemplaza window.confirm) -->
+    <div x-show="confirmacionLateral.visible"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 translate-x-8"
+         x-transition:enter-end="opacity-100 translate-x-0"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100 translate-x-0"
+         x-transition:leave-end="opacity-0 translate-x-8"
+         class="fixed right-4 sm:right-6 top-1/2 -translate-y-1/2 z-[9999] w-80 sm:w-[420px] max-w-[92vw] no-print"
+         x-cloak>
+        <div class="bg-slate-900 border-2 border-amber-500 rounded-2xl p-5 shadow-2xl space-y-4">
+            <div class="flex items-start gap-3">
+                <div class="w-10 h-10 rounded-xl bg-amber-950 text-amber-300 flex items-center justify-center text-xl shrink-0 font-bold">
+                    ⚡
+                </div>
+                <div class="flex-1">
+                    <h4 class="text-sm font-black text-white uppercase tracking-wide" x-text="confirmacionLateral.titulo || 'Confirmar Acción'"></h4>
+                    <p class="text-sm text-slate-200 font-medium whitespace-pre-line mt-1.5 leading-snug" x-text="confirmacionLateral.mensaje"></p>
+                </div>
+            </div>
+            <div class="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800">
+                <button type="button"
+                        @click="resolverConfirmacionLateral(false)"
+                        class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">
+                    Cancelar
+                </button>
+                <button type="button"
+                        @click="resolverConfirmacionLateral(true)"
+                        class="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md transition">
+                    ✅ Aceptar
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- LOGICA ALPINE JS -->
     <script>
         function agroApp() {
@@ -2477,7 +2551,73 @@
                     balance_periodo: 0
                 },
 
+                avisoLateral: {
+                    visible: false,
+                    mensaje: '',
+                    tipo: 'success',
+                    timer: null
+                },
+
+                confirmacionLateral: {
+                    visible: false,
+                    titulo: 'Confirmar Acción',
+                    mensaje: '',
+                    resolver: null
+                },
+
+                mostrarAvisoLateral(msg) {
+                    const texto = String(msg || '');
+                    let tipo = 'success';
+                    if (texto.includes('⚠️') || texto.toLowerCase().includes('verifica') || texto.toLowerCase().includes('selecciona')) {
+                        tipo = 'warning';
+                    } else if (texto.toLowerCase().includes('error') || texto.includes('❌') || (!texto.includes('✅') && !texto.toLowerCase().includes('completado') && !texto.toLowerCase().includes('éxito') && !texto.toLowerCase().includes('correctamente'))) {
+                        tipo = 'error';
+                    }
+                    // Limpiar el emoji inicial si ya lo ponemos en el icono lateral
+                    const limpio = texto.replace(/^([✅⚠️❌]\s*)/, '');
+                    if (this.avisoLateral.timer) {
+                        clearTimeout(this.avisoLateral.timer);
+                    }
+                    this.avisoLateral.mensaje = limpio;
+                    this.avisoLateral.tipo = tipo;
+                    this.avisoLateral.visible = true;
+
+                    // Cerrar automáticamente en 2.5s si es confirmación de éxito (o 4.5s para avisos) para agilizar capturas
+                    const duracion = tipo === 'success' ? 2500 : 5000;
+                    this.avisoLateral.timer = setTimeout(() => {
+                        this.avisoLateral.visible = false;
+                    }, duracion);
+                },
+
+                cerrarAvisoLateral() {
+                    if (this.avisoLateral.timer) {
+                        clearTimeout(this.avisoLateral.timer);
+                    }
+                    this.avisoLateral.visible = false;
+                },
+
+                pedirConfirmacionLateral(mensaje, titulo = 'Confirmar Acción') {
+                    return new Promise((resolve) => {
+                        this.confirmacionLateral.titulo = titulo;
+                        this.confirmacionLateral.mensaje = String(mensaje || '').replace(/^([⚠️❓]\s*)/, '');
+                        this.confirmacionLateral.resolver = resolve;
+                        this.confirmacionLateral.visible = true;
+                    });
+                },
+
+                resolverConfirmacionLateral(respuesta) {
+                    this.confirmacionLateral.visible = false;
+                    if (typeof this.confirmacionLateral.resolver === 'function') {
+                        const fn = this.confirmacionLateral.resolver;
+                        this.confirmacionLateral.resolver = null;
+                        fn(Boolean(respuesta));
+                    }
+                },
+
                 async initApp() {
+                    // Redirigir todos los window.alert al panel lateral rápido
+                    window.alert = (msg) => this.mostrarAvisoLateral(msg);
+
                     await this.cargarConfiguracion();
                     if (this.tokenSesion) {
                         await this.verificarToken();
@@ -2822,7 +2962,7 @@
 
                 async eliminarCategoria(cat) {
                     if (!cat || !cat.id) return;
-                    if (!confirm(`¿Eliminar la categoría "${cat.nombre}"?\n\nLos movimientos ya registrados conservarán sus datos y quedarán como "Sin Asignar".`)) {
+                    if (!(await this.pedirConfirmacionLateral(`¿Eliminar la categoría "${cat.nombre}"?\n\nLos movimientos ya registrados conservarán sus datos y quedarán como "Sin Asignar".`, 'Eliminar Categoría'))) {
                         return;
                     }
                     this.loading = true;
@@ -2969,7 +3109,7 @@
                 },
 
                 async eliminarCuenta(cta) {
-                    if (!confirm(`¿Estás seguro de eliminar la cuenta "${cta.nombre}" (${cta.banco})? Se mantendrá el historial previo en auditoría.`)) {
+                    if (!(await this.pedirConfirmacionLateral(`¿Estás seguro de eliminar la cuenta "${cta.nombre}" (${cta.banco})? Se mantendrá el historial previo en auditoría.`, 'Eliminar Cuenta Bancaria'))) {
                         return;
                     }
                     const res = await fetch(`/api/cuentas/${cta.id}`, { method: 'DELETE' });
@@ -3031,7 +3171,7 @@
 
                 async guardarNuevoUsuario() {
                     if (this.nuevoUsuario.rol === 'OPERADOR' && (!this.nuevoUsuario.cuentas_permitidas || this.nuevoUsuario.cuentas_permitidas.length === 0)) {
-                        if (!confirm('⚠️ No has seleccionado ninguna cuenta para este operador. ¿Deseas guardarlo sin acceso a cuentas por ahora?')) {
+                        if (!(await this.pedirConfirmacionLateral('⚠️ No has seleccionado ninguna cuenta para este operador. ¿Deseas guardarlo sin acceso a cuentas por ahora?', 'Confirmar Usuario sin Cuentas'))) {
                             return;
                         }
                     }
@@ -3079,7 +3219,7 @@
                 },
 
                 async eliminarUsuario(u) {
-                    if (!confirm(`¿Desactivar al usuario @${u.username}?`)) return;
+                    if (!(await this.pedirConfirmacionLateral(`¿Desactivar al usuario @${u.username}?`, 'Desactivar Usuario'))) return;
                     const res = await fetch(`/api/usuarios/${u.id}`, { method: 'DELETE' });
                     if (res.ok) {
                         await this.cargarUsuarios();
@@ -3150,7 +3290,7 @@
 
                 async eliminarEntidad(ent) {
                     if (!ent || !ent.id) return;
-                    if (!confirm(`¿Eliminar "${ent.nombre}" de la lista?\n\nLos movimientos conservarán su registro sin cliente/proveedor asociado.`)) {
+                    if (!(await this.pedirConfirmacionLateral(`¿Eliminar "${ent.nombre}" de la lista?\n\nLos movimientos conservarán su registro sin cliente/proveedor asociado.`, 'Eliminar Cliente / Proveedor'))) {
                         return;
                     }
                     this.loading = true;
@@ -3425,7 +3565,7 @@
                 async eliminarTransaccion(t) {
                     const formattedMonto = this.formatMoney(t.monto);
                     const signo = t.tipo === 'SALIDA' ? '-' : '+';
-                    if (!confirm(`¿Estás seguro de eliminar este movimiento?\n\nFecha: ${t.fecha}\nConcepto: ${t.concepto}\nMonto: ${signo}${formattedMonto}\n\nLos saldos de la cuenta bancaria se recalcularán automáticamente.`)) {
+                    if (!(await this.pedirConfirmacionLateral(`¿Estás seguro de eliminar este movimiento?\n\nFecha: ${t.fecha}\nConcepto: ${t.concepto}\nMonto: ${signo}${formattedMonto}\n\nLos saldos de la cuenta bancaria se recalcularán automáticamente.`, 'Eliminar Movimiento'))) {
                         return;
                     }
                     this.loading = true;
@@ -3525,7 +3665,7 @@
                 },
 
                 async eliminarArchivoEstadoCuenta(a) {
-                    if (!confirm(`¿Estás seguro de eliminar el PDF "${a.nombre_archivo_original}" (${this.getNombreMes(a.mes)} ${a.anio})?`)) {
+                    if (!(await this.pedirConfirmacionLateral(`¿Estás seguro de eliminar el PDF "${a.nombre_archivo_original}" (${this.getNombreMes(a.mes)} ${a.anio})?`, 'Eliminar Estado de Cuenta PDF'))) {
                         return;
                     }
                     const res = await fetch(`/api/archivos-estado-cuenta/${a.id}`, {
