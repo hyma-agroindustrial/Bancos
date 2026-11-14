@@ -26,7 +26,7 @@ from .schemas import (
     UsuarioLogin, UsuarioCreate, UsuarioUpdate, UsuarioResponse, AuthResponse,
     ConfiguracionData, EstadoCuentaArchivoResponse
 )
-from .parsers.bank_pdf_parser import extract_movements_from_pdf
+from .parsers.bank_pdf_parser import extract_movements_from_pdf, generate_movement_hash
 
 # Inicializar Base de Datos
 Base.metadata.create_all(bind=engine)
@@ -720,15 +720,46 @@ def confirmar_importacion_lote(payload: BatchImportConfirm, db: Session = Depend
     insertados = 0
     ignorados = 0
 
+    hashes_db = set(
+        h[0] for h in db.query(Transaccion.hash_deduplicacion).filter(
+            Transaccion.hash_deduplicacion != None
+        ).all()
+    )
+    hashes_lote = set()
+    occurrence_counts: Dict[str, int] = {}
+
     for m in payload.movimientos:
         if m.es_duplicado:
             ignorados += 1
             continue
 
-        existe = db.query(Transaccion).filter(Transaccion.hash_deduplicacion == m.hash_deduplicacion).first()
-        if existe:
+        base_hash = m.hash_deduplicacion
+        count = occurrence_counts.get(base_hash, 0) + 1
+        occurrence_counts[base_hash] = count
+
+        final_hash = base_hash
+        if count > 1 or final_hash in hashes_lote:
+            ref_part = m.referencia or ""
+            base_concept = f"{m.concepto} {ref_part}".strip() if ref_part else m.concepto
+            seq = count if count > 1 else 2
+            while True:
+                candidate = generate_movement_hash(
+                    payload.cuenta_id,
+                    m.fecha,
+                    Decimal(str(m.monto)),
+                    m.tipo,
+                    f"{base_concept} #{seq}"
+                )
+                if candidate not in hashes_lote:
+                    final_hash = candidate
+                    break
+                seq += 1
+
+        if final_hash in hashes_db:
             ignorados += 1
             continue
+
+        hashes_lote.add(final_hash)
 
         nueva_trans = Transaccion(
             cuenta_id=payload.cuenta_id,
@@ -741,7 +772,7 @@ def confirmar_importacion_lote(payload: BatchImportConfirm, db: Session = Depend
             referencia=m.referencia,
             origen="PDF_EXTRACT",
             archivo_fuente=payload.archivo_nombre,
-            hash_deduplicacion=m.hash_deduplicacion
+            hash_deduplicacion=final_hash
         )
         db.add(nueva_trans)
         insertados += 1

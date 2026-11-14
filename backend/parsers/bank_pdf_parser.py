@@ -114,6 +114,38 @@ def generate_movement_hash(cuenta_id: int, f_date: date, monto: Decimal, tipo: s
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def _disambiguate_intra_pdf_hashes(
+    movements: List[Dict[str, Any]],
+    cuenta_id: int,
+    existing_hashes: set
+) -> List[Dict[str, Any]]:
+    """
+    Cuando un mismo estado de cuenta PDF contiene múltiples movimientos legítimos idénticos
+    en el mismo día (ej. varias comisiones SPEI de $2.50 e IVA de $0.40 el mismo día),
+    asigna un sufijo secuencial (#2, #3...) al hash de cada ocurrencia repetida dentro del PDF
+    para que no colisionen entre sí al insertarse, pero sigan detectándose como duplicados si se
+    vuelve a subir el mismo PDF.
+    """
+    occurrence_counts: Dict[str, int] = {}
+    for m in movements:
+        base_hash = m["hash_deduplicacion"]
+        count = occurrence_counts.get(base_hash, 0) + 1
+        occurrence_counts[base_hash] = count
+        if count > 1:
+            ref_part = m.get("referencia") or ""
+            base_concept = f"{m['concepto']} {ref_part}".strip() if ref_part else m["concepto"]
+            new_hash = generate_movement_hash(
+                cuenta_id,
+                m["fecha"],
+                Decimal(str(m["monto"])),
+                m["tipo"],
+                f"{base_concept} #{count}"
+            )
+            m["hash_deduplicacion"] = new_hash
+            m["es_duplicado"] = new_hash in existing_hashes
+    return movements
+
+
 def _extract_banorte_words(page, cuenta_id: int, existing_hashes: set) -> List[Dict[str, Any]]:
     """
     Extractor de alta precisión para estados de cuenta Banorte (Enlace Negocios / PyME).
@@ -437,7 +469,7 @@ def extract_movements_from_pdf(
                     movements.extend(banorte_movs)
 
         if movements:
-            return movements
+            return _disambiguate_intra_pdf_hashes(movements, cuenta_id, existing_hashes)
 
         # A2) ESTRATEGIA 1B: SCOTIABANK POSICIONAL
         for page in pdf.pages:
@@ -454,7 +486,7 @@ def extract_movements_from_pdf(
                     movements.extend(scotia_movs)
 
         if movements:
-            return movements
+            return _disambiguate_intra_pdf_hashes(movements, cuenta_id, existing_hashes)
 
         # B) ESTRATEGIA 2: TABLAS NATIVAS (BBVA, Santander, Banamex, etc.)
         for page in pdf.pages:
@@ -592,4 +624,4 @@ def extract_movements_from_pdf(
                             "es_duplicado": m_hash in existing_hashes
                         })
 
-    return movements
+    return _disambiguate_intra_pdf_hashes(movements, cuenta_id, existing_hashes)
