@@ -16,6 +16,7 @@ class Usuario(Base):
     nombre = Column(String(100), nullable=False)
     pin_hash = Column(String(128), nullable=False)
     rol = Column(String(20), default="ADMIN", nullable=False) # 'ADMIN', 'CAPTURISTA'
+    cuentas_permitidas = Column(Text, default="[]", nullable=True) # JSON array de IDs de cuentas permitidas
     activo = Column(Boolean, default=True, nullable=False)
     token_sesion = Column(String(64), nullable=True, index=True)
     created_at = Column(DateTime, server_default=func.now())
@@ -90,3 +91,19 @@ class Transaccion(Base):
     cuenta = relationship("Cuenta", back_populates="transacciones")
     categoria = relationship("Categoria", back_populates="transacciones")
     entidad = relationship("Entidad", back_populates="transacciones")
+
+class EstadoCuentaArchivo(Base):
+    __tablename__ = "estados_cuenta_archivos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    cuenta_id = Column(Integer, ForeignKey("cuentas.id", ondelete="CASCADE"), nullable=False, index=True)
+    anio = Column(Integer, nullable=False, index=True)
+    mes = Column(Integer, nullable=False, index=True)
+    nombre_archivo_original = Column(String(255), nullable=False)
+    nombre_archivo_almacenado = Column(String(255), nullable=False)
+    ruta_archivo = Column(String(500), nullable=False)
+    tamano_bytes = Column(Integer, default=0)
+    notas = Column(Text, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+    cuenta = relationship("Cuenta")

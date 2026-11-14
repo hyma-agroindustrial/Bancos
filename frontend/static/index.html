@@ -132,6 +132,76 @@
                 font-weight: bold !important;
             }
         }
+
+        /* ========================================================================== */
+        /* ESCALADO AL DOBLE DE TAMAÑO PARA VENTANAS EN MODO GRANDE                  */
+        /* ========================================================================== */
+        .modal-scaled-grande {
+            font-size: 1.25rem !important;
+        }
+        .modal-scaled-grande h3 {
+            font-size: 1.85rem !important;
+            line-height: 2.25rem !important;
+        }
+        .modal-scaled-grande p {
+            font-size: 1.05rem !important;
+            line-height: 1.5rem !important;
+        }
+        .modal-scaled-grande label {
+            font-size: 1.05rem !important;
+            font-weight: 700 !important;
+            margin-bottom: 0.45rem !important;
+            color: #f1f5f9 !important;
+        }
+        .modal-scaled-grande input[type="text"],
+        .modal-scaled-grande input[type="number"],
+        .modal-scaled-grande input[type="date"],
+        .modal-scaled-grande input[type="password"],
+        .modal-scaled-grande select,
+        .modal-scaled-grande textarea {
+            font-size: 1.2rem !important;
+            padding: 0.85rem 1.15rem !important;
+            border-radius: 1rem !important;
+            line-height: 1.6rem !important;
+        }
+        .modal-scaled-grande span.uppercase {
+            font-size: 1.05rem !important;
+            letter-spacing: 0.05em !important;
+        }
+        .modal-scaled-grande .text-\[10px\],
+        .modal-scaled-grande .text-\[11px\],
+        .modal-scaled-grande .text-xs {
+            font-size: 0.95rem !important;
+            line-height: 1.4rem !important;
+        }
+        .modal-scaled-grande .w-12.h-12 {
+            width: 4.75rem !important;
+            height: 4.75rem !important;
+        }
+        .modal-scaled-grande .w-28.h-9 {
+            width: 10.5rem !important;
+            height: 3.5rem !important;
+        }
+        .modal-scaled-grande .w-28.h-9 span {
+            font-size: 1.25rem !important;
+        }
+        .modal-scaled-grande button[type="submit"] {
+            font-size: 1.2rem !important;
+            padding: 0.9rem 2rem !important;
+            border-radius: 1rem !important;
+        }
+        .modal-scaled-grande button.btn-cancelar {
+            font-size: 1.1rem !important;
+            padding: 0.8rem 1.5rem !important;
+        }
+        .modal-scaled-grande input[type="file"] {
+            font-size: 1rem !important;
+        }
+        .modal-scaled-grande input[type="file"]::file-selector-button {
+            font-size: 1rem !important;
+            padding: 0.6rem 1.2rem !important;
+            border-radius: 0.75rem !important;
+        }
     </style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased" x-data="agroApp()" x-init="initApp()" x-cloak>
@@ -187,7 +257,7 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex justify-between items-center">
             
             <!-- ENCABEZADO MODIFICABLE (LOGO, NOMBRE, DESCRIPCIÓN) -->
-            <div class="flex items-center space-x-3 cursor-pointer group" @click="abrirModalConfig()" title="Haga clic para editar encabezado y logo">
+            <div class="flex items-center space-x-3 group" :class="usuarioActual && usuarioActual.rol === 'ADMIN' ? 'cursor-pointer' : ''" @click="if(usuarioActual && usuarioActual.rol === 'ADMIN') abrirModalConfig()" :title="usuarioActual && usuarioActual.rol === 'ADMIN' ? 'Haga clic para editar encabezado y logo' : ''">
                 <template x-if="config.logo_url">
                     <img :src="config.logo_url" alt="Logo" class="w-10 h-10 object-contain rounded-xl border border-slate-700 p-0.5 bg-slate-900 shadow-md">
                 </template>
@@ -200,40 +270,46 @@
                 <div>
                     <div class="flex items-center gap-1.5">
                         <h1 class="text-sm sm:text-base font-extrabold text-white tracking-wide uppercase group-hover:text-emerald-400 transition" x-text="config.nombre_sistema || 'Consolidado de Bancos'"></h1>
-                        <span class="text-[10px] text-slate-500 group-hover:text-slate-300">✏️</span>
+                        <span x-show="usuarioActual && usuarioActual.rol === 'ADMIN'" class="text-[10px] text-slate-500 group-hover:text-slate-300">✏️</span>
                     </div>
                     <p class="text-[10px] sm:text-xs text-slate-400" x-text="config.descripcion_sistema || 'Sistema de Control de Gastos & Cuentas Fiscales'"></p>
                 </div>
             </div>
             
             <div class="flex items-center space-x-2">
-                <!-- Botón Personalizar Encabezado -->
-                <button @click="abrirModalConfig()" title="Personalizar Logotipo, Título y Descripción" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 p-2 sm:px-2.5 sm:py-2 rounded-lg font-medium transition flex items-center gap-1">
+                <!-- Botón Personalizar Encabezado (Solo ADMIN) -->
+                <button x-show="usuarioActual && usuarioActual.rol === 'ADMIN'" @click="abrirModalConfig()" title="Personalizar Logotipo, Título y Descripción" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 p-2 sm:px-2.5 sm:py-2 rounded-lg font-medium transition flex items-center gap-1">
                     <span>⚙️</span>
                     <span class="hidden md:inline">Personalizar</span>
                 </button>
 
-                <!-- Botón Usuarios -->
-                <button @click="openModalUsuarios = true; cargarUsuarios()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 p-2 sm:px-2.5 sm:py-2 rounded-lg font-medium transition flex items-center gap-1">
+                <!-- Botón Usuarios (Solo ADMIN) -->
+                <button x-show="usuarioActual && usuarioActual.rol === 'ADMIN'" @click="openModalUsuarios = true; cargarUsuarios()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 p-2 sm:px-2.5 sm:py-2 rounded-lg font-medium transition flex items-center gap-1">
                     <span>👥</span>
                     <span class="hidden sm:inline">Usuarios</span>
                 </button>
 
-                <!-- Botón Nueva Cuenta -->
-                <button @click="abrirModalCrearCuenta()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 p-2 sm:px-2.5 sm:py-2 rounded-lg font-medium transition flex items-center gap-1">
+                <!-- Botón Nueva Cuenta (Solo ADMIN) -->
+                <button x-show="usuarioActual && usuarioActual.rol === 'ADMIN'" @click="abrirModalCrearCuenta()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 p-2 sm:px-2.5 sm:py-2 rounded-lg font-medium transition flex items-center gap-1">
                     <span>🏦</span>
                     <span class="hidden sm:inline">Nueva Cuenta</span>
                 </button>
 
-                <!-- Botón Catálogos (Categorías & Clientes/Proveedores) -->
-                <button @click="abrirModalCatalogos()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 p-2 sm:px-2.5 sm:py-2 rounded-lg font-medium transition flex items-center gap-1" title="Ver y corregir catálogo de categorías y clientes/proveedores">
+                <!-- Botón Catálogos (Solo ADMIN) -->
+                <button x-show="usuarioActual && usuarioActual.rol === 'ADMIN'" @click="abrirModalCatalogos()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 p-2 sm:px-2.5 sm:py-2 rounded-lg font-medium transition flex items-center gap-1" title="Ver y corregir catálogo de categorías y clientes/proveedores">
                     <span>🏷️</span>
                     <span class="hidden sm:inline">Catálogos</span>
                 </button>
 
                 <!-- Badge Usuario Actual & Logout -->
                 <div class="flex items-center pl-2 border-l border-slate-800 space-x-2" x-show="usuarioActual">
-                    <span class="text-xs font-semibold px-2 py-1 rounded-md bg-emerald-950 text-emerald-400 border border-emerald-800/80 hidden lg:inline" x-text="usuarioActual ? usuarioActual.nombre : ''"></span>
+                    <span class="text-xs font-semibold px-2 py-1 rounded-md border flex items-center gap-1.5"
+                          :class="usuarioActual && usuarioActual.rol === 'ADMIN' ? 'bg-amber-950/60 text-amber-300 border-amber-800/80' : 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80'">
+                        <span x-text="usuarioActual ? usuarioActual.nombre : ''"></span>
+                        <span class="text-[9px] uppercase px-1 py-0.2 rounded font-black tracking-wider"
+                              :class="usuarioActual && usuarioActual.rol === 'ADMIN' ? 'bg-amber-500 text-slate-950' : 'bg-emerald-500 text-slate-950'"
+                              x-text="usuarioActual ? usuarioActual.rol : ''"></span>
+                    </span>
                     <button @click="logout" title="Cerrar Sesión" class="text-xs bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/60 px-2 py-1.5 rounded-lg transition">
                         🚪 Salir
                     </button>
@@ -247,16 +323,16 @@
         <!-- 1. RESUMEN DE CUENTAS BANCARIAS (MODIFICAR & ELIMINAR) -->
         <section class="no-print">
             <div class="flex justify-between items-center mb-3">
-                <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400">Cuentas Bancarias Registradas</h2>
-                <span class="text-xs text-slate-500 font-mono" x-text="cuentas.length + ' cuenta(s) activa(s)'"></span>
+                <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400">Cuentas Bancarias Disponibles</h2>
+                <span class="text-xs text-slate-500 font-mono" x-text="cuentasPermitidas.length + ' cuenta(s)'"></span>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <template x-for="cta in cuentas" :key="cta.id">
+                <template x-for="cta in cuentasPermitidas" :key="cta.id">
                     <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 shadow-sm hover:border-emerald-500/50 transition relative group flex flex-col justify-between">
                         
-                        <!-- Acciones: Modificar y Eliminar -->
-                        <div class="absolute top-3 right-3 flex space-x-1.5 z-10">
+                        <!-- Acciones: Modificar y Eliminar (Solo ADMIN) -->
+                        <div class="absolute top-3 right-3 flex space-x-1.5 z-10" x-show="usuarioActual && usuarioActual.rol === 'ADMIN'">
                             <button @click="abrirModalEditarCuenta(cta)" title="Modificar Datos y Logos" class="p-1.5 text-slate-400 hover:text-white bg-slate-900/90 hover:bg-slate-700 rounded-lg text-xs transition border border-slate-700 shadow">
                                 ✏️
                             </button>
@@ -313,6 +389,13 @@
                         </div>
                     </div>
                 </template>
+
+                <!-- Aviso para operador sin cuentas -->
+                <div x-show="cuentasPermitidas.length === 0" class="col-span-full bg-amber-950/40 border border-amber-800/60 p-6 rounded-2xl text-center">
+                    <div class="text-3xl mb-2">🔒</div>
+                    <h3 class="text-base font-bold text-amber-300">No tienes cuentas asignadas</h3>
+                    <p class="text-xs text-slate-400 mt-1 max-w-md mx-auto">Tu usuario tiene rol de Operador pero aún no se le han asignado cuentas bancarias específicas. Solicita al Administrador que te asigne acceso en el módulo de Usuarios.</p>
+                </div>
             </div>
         </section>
 
@@ -331,6 +414,9 @@
                 <button @click="activeTab = 'corte'; if(!datosEstadoCuenta) generarEstadoCuenta();" :class="activeTab === 'corte' ? 'border-emerald-500 text-emerald-400 font-bold' : 'border-transparent text-slate-400 hover:text-slate-200'" class="py-3 px-2 sm:px-3 border-b-2 text-xs sm:text-sm flex items-center gap-1.5 whitespace-nowrap transition">
                     <span>🏛️</span> <span>Corte de Mes (Estado de Cuenta)</span>
                 </button>
+                <button @click="activeTab = 'estados_cuenta'; cargarArchivosEstadoCuenta();" :class="activeTab === 'estados_cuenta' ? 'border-emerald-500 text-emerald-400 font-bold' : 'border-transparent text-slate-400 hover:text-slate-200'" class="py-3 px-2 sm:px-3 border-b-2 text-xs sm:text-sm flex items-center gap-1.5 whitespace-nowrap transition">
+                    <span>📁</span> <span>Estados de Cuenta</span>
+                </button>
             </div>
 
             <!-- TAB 1: FORMULARIO DINÁMICO DE CAPTURA MANUAL CON CATEGORÍAS AL VUELO -->
@@ -343,7 +429,7 @@
                             <label class="block text-xs font-semibold text-slate-300 mb-1">Cuenta Bancaria *</label>
                             <select x-model="form.cuenta_id" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500">
                                 <option value="">Selecciona cuenta...</option>
-                                <template x-for="cta in cuentas" :key="cta.id">
+                                <template x-for="cta in cuentasPermitidas" :key="cta.id">
                                     <option :value="cta.id" x-text="formatCuentaLabel(cta)"></option>
                                 </template>
                             </select>
@@ -460,7 +546,7 @@
                             <label class="block text-xs font-semibold text-slate-300 mb-1">Cuenta Destino *</label>
                             <select x-model="pdfCuentaId" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
                                 <option value="">Selecciona cuenta...</option>
-                                <template x-for="cta in cuentas" :key="cta.id">
+                                <template x-for="cta in cuentasPermitidas" :key="cta.id">
                                     <option :value="cta.id" x-text="formatCuentaLabel(cta)"></option>
                                 </template>
                             </select>
@@ -538,7 +624,7 @@
                         <label class="block text-[11px] font-semibold text-slate-400 mb-1">Cuenta</label>
                         <select x-model="filtros.cuenta_id" @change="filtrarTransacciones" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
                             <option value="">Todas las cuentas</option>
-                            <template x-for="cta in cuentas" :key="cta.id">
+                            <template x-for="cta in cuentasPermitidas" :key="cta.id">
                                 <option :value="cta.id" x-text="formatCuentaLabel(cta)"></option>
                             </template>
                         </select>
@@ -651,7 +737,7 @@
                         <div>
                             <label class="block text-[11px] font-semibold text-slate-400 mb-1">Cuenta Bancaria *</label>
                             <select x-model="corteCuentaId" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
-                                <template x-for="cta in cuentas" :key="cta.id">
+                                <template x-for="cta in cuentasPermitidas" :key="cta.id">
                                     <option :value="cta.id" x-text="formatCuentaLabel(cta)"></option>
                                 </template>
                             </select>
@@ -852,13 +938,6 @@
                             </table>
                         </div>
                     </div>
-                                    <tr x-show="!datosEstadoCuenta || datosEstadoCuenta.movimientos.length === 0">
-                                        <td colspan="7" class="p-6 text-center text-slate-500">No se registraron movimientos bancarios en el mes seleccionado.</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
 
                     <!-- DESGLOSE FISCAL POR CATEGORÍAS -->
                     <div x-show="datosEstadoCuenta && datosEstadoCuenta.desglose_categorias.length > 0" class="pt-4 border-t border-slate-800">
@@ -882,6 +961,196 @@
                         <div x-text="'Generado: ' + new Date().toLocaleDateString('es-MX') + ' ' + new Date().toLocaleTimeString('es-MX')"></div>
                     </div>
 
+                </div>
+            </div>
+
+            <!-- TAB 5: ARCHIVO DIGITAL DE ESTADOS DE CUENTA (PDF ORIGINAL DEL BANCO) -->
+            <div x-show="activeTab === 'estados_cuenta'" class="p-4 sm:p-6 space-y-6">
+                <!-- ENCABEZADO DE SECCIÓN -->
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-4 border-b border-slate-800">
+                    <div>
+                        <h2 class="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                            <span>📁</span> <span>Archivo Digital de Estados de Cuenta Oficiales</span>
+                        </h2>
+                        <p class="text-xs text-slate-400">Resguarda y consulta los estados de cuenta mensuales originales en PDF emitidos por los bancos (BBVA, Banorte, Santander, etc.).</p>
+                    </div>
+                    <button type="button" @click="cargarArchivosEstadoCuenta()" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs rounded-xl border border-slate-700 flex items-center gap-1">
+                        <span>🔄</span> <span>Actualizar Lista</span>
+                    </button>
+                </div>
+
+                <!-- 1. FORMULARIO PARA SUBIR NUEVO PDF -->
+                <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-4">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                        <span>📤</span> <span>Subir Nuevo Estado de Cuenta (PDF Bancario)</span>
+                    </h3>
+
+                    <form @submit.prevent="subirArchivoEstadoCuenta" class="space-y-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                            <!-- Cuenta Bancaria -->
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-300 mb-1">Cuenta Bancaria *</label>
+                                <select x-model="edoPdfForm.cuenta_id" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                                    <option value="">Selecciona cuenta...</option>
+                                    <template x-for="cta in cuentasPermitidas" :key="cta.id">
+                                        <option :value="cta.id" x-text="formatCuentaLabel(cta)"></option>
+                                    </template>
+                                </select>
+                            </div>
+
+                            <!-- Año -->
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-300 mb-1">Año *</label>
+                                <select x-model="edoPdfForm.anio" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                                    <option value="2027">2027</option>
+                                    <option value="2026">2026</option>
+                                    <option value="2025">2025</option>
+                                    <option value="2024">2024</option>
+                                    <option value="2023">2023</option>
+                                </select>
+                            </div>
+
+                            <!-- Mes -->
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-300 mb-1">Mes del Estado de Cuenta *</label>
+                                <select x-model="edoPdfForm.mes" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                                    <option value="1">Enero</option>
+                                    <option value="2">Febrero</option>
+                                    <option value="3">Marzo</option>
+                                    <option value="4">Abril</option>
+                                    <option value="5">Mayo</option>
+                                    <option value="6">Junio</option>
+                                    <option value="7">Julio</option>
+                                    <option value="8">Agosto</option>
+                                    <option value="9">Septiembre</option>
+                                    <option value="10">Octubre</option>
+                                    <option value="11">Noviembre</option>
+                                    <option value="12">Diciembre</option>
+                                </select>
+                            </div>
+
+                            <!-- Archivo PDF -->
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-300 mb-1">Archivo PDF Bancario *</label>
+                                <input type="file" id="inputPdfEdoCuenta" accept="application/pdf,.pdf" required @change="seleccionarPdfEdoCuenta($event)" class="w-full text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-emerald-400 hover:file:bg-slate-700 cursor-pointer">
+                            </div>
+                        </div>
+
+                        <!-- Notas u Observaciones opcionales y botón guardar -->
+                        <div class="flex flex-col sm:flex-row items-center gap-3">
+                            <div class="flex-1 w-full">
+                                <input type="text" x-model="edoPdfForm.notas" placeholder="Observaciones o notas (opcional, ej. Estado de cuenta fiscal timbrado / con firma)" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                            </div>
+                            <button type="submit" :disabled="subiendoEdoPdf" class="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs px-6 py-2.5 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-950">
+                                <span x-show="subiendoEdoPdf" class="animate-spin">⏳</span>
+                                <span x-text="subiendoEdoPdf ? 'Subiendo PDF...' : '📤 Subir y Guardar Estado de Cuenta'"></span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- 2. REPOSITORIO & BUSCADOR CON FILTROS -->
+                <div class="space-y-3">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">
+                            Estados de Cuenta Almacenados (<span x-text="archivosEstadoCuentaFiltrados.length"></span>)
+                        </h3>
+
+                        <!-- FILTROS RÁPIDOS -->
+                        <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                            <!-- Filtro Cuenta -->
+                            <select x-model="filtroEdoCuentaId" class="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-white">
+                                <option value="">Todas las cuentas</option>
+                                <template x-for="cta in cuentasPermitidas" :key="cta.id">
+                                    <option :value="cta.id" x-text="cta.banco + ' · ' + cta.nombre"></option>
+                                </template>
+                            </select>
+
+                            <!-- Filtro Año -->
+                            <select x-model="filtroEdoAnio" class="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-white">
+                                <option value="">Todos los años</option>
+                                <option value="2027">2027</option>
+                                <option value="2026">2026</option>
+                                <option value="2025">2025</option>
+                                <option value="2024">2024</option>
+                                <option value="2023">2023</option>
+                            </select>
+
+                            <!-- Filtro Mes -->
+                            <select x-model="filtroEdoMes" class="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-white">
+                                <option value="">Todos los meses</option>
+                                <option value="1">Enero</option>
+                                <option value="2">Febrero</option>
+                                <option value="3">Marzo</option>
+                                <option value="4">Abril</option>
+                                <option value="5">Mayo</option>
+                                <option value="6">Junio</option>
+                                <option value="7">Julio</option>
+                                <option value="8">Agosto</option>
+                                <option value="9">Septiembre</option>
+                                <option value="10">Octubre</option>
+                                <option value="11">Noviembre</option>
+                                <option value="12">Diciembre</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- GRID DE ESTADOS DE CUENTA EN TARJETAS MODERNAS -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                        <template x-for="a in archivosEstadoCuentaFiltrados" :key="a.id">
+                            <div class="bg-slate-900 border border-slate-800 hover:border-emerald-500/50 rounded-2xl p-4 flex flex-col justify-between transition shadow-sm group">
+                                <div class="space-y-2.5">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <div class="flex items-center gap-2.5 min-w-0">
+                                            <div class="w-10 h-10 rounded-xl bg-rose-950/60 border border-rose-800/80 text-rose-400 flex items-center justify-center text-xl shrink-0 shadow-inner">
+                                                📄
+                                            </div>
+                                            <div class="min-w-0">
+                                                <span class="text-xs font-bold text-white block truncate" x-text="a.cuenta_banco + ' · ' + a.cuenta_nombre"></span>
+                                                <span class="text-[10px] text-slate-400 font-mono" x-text="'Cuenta: *' + (a.cuenta_numero ? a.cuenta_numero.slice(-4) : '')"></span>
+                                            </div>
+                                        </div>
+                                        <span class="px-2 py-0.5 rounded-lg text-xs font-black bg-emerald-950 border border-emerald-800/80 text-emerald-400 shrink-0 font-mono" x-text="getNombreMes(a.mes) + ' ' + a.anio"></span>
+                                    </div>
+
+                                    <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-xs space-y-1">
+                                        <div class="text-slate-300 font-mono truncate text-[11px]" :title="a.nombre_archivo_original" x-text="a.nombre_archivo_original"></div>
+                                        <div class="flex justify-between items-center text-[10px] text-slate-500">
+                                            <span x-text="formatBytes(a.tamano_bytes)"></span>
+                                            <span x-text="'Subido: ' + (a.created_at ? a.created_at.slice(0, 10) : '')"></span>
+                                        </div>
+                                        <div x-show="a.notas" class="text-[11px] text-slate-400 italic pt-1 border-t border-slate-800/80" x-text="a.notas"></div>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-center justify-between gap-2 pt-3 mt-3 border-t border-slate-800/80">
+                                    <div class="flex items-center gap-1.5">
+                                        <!-- Ver PDF inline -->
+                                        <a :href="'/api/archivos-estado-cuenta/' + a.id + '/ver'" target="_blank" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-semibold transition flex items-center gap-1">
+                                            <span>👁️</span> <span>Ver PDF</span>
+                                        </a>
+
+                                        <!-- Descargar PDF -->
+                                        <a :href="'/api/archivos-estado-cuenta/' + a.id + '/descargar'" download class="px-2.5 py-1.5 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-800/80 text-emerald-400 rounded-lg text-xs font-semibold transition flex items-center gap-1">
+                                            <span>📥</span> <span>Descargar</span>
+                                        </a>
+                                    </div>
+
+                                    <!-- Eliminar (Solo ADMIN) -->
+                                    <button x-show="usuarioActual && usuarioActual.rol === 'ADMIN'" type="button" @click="eliminarArchivoEstadoCuenta(a)" class="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg text-xs transition" title="Eliminar archivo">
+                                        🗑️
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- ESTADO VACÍO -->
+                    <div x-show="archivosEstadoCuentaFiltrados.length === 0" class="bg-slate-900/50 border border-slate-800 p-8 rounded-2xl text-center space-y-2">
+                        <div class="text-3xl text-slate-600">📁</div>
+                        <h4 class="text-sm font-bold text-slate-400">No hay estados de cuenta registrados para este filtro</h4>
+                        <p class="text-xs text-slate-500 max-w-sm mx-auto">Selecciona la cuenta bancaria, año y mes en el formulario superior para subir el PDF oficial generado por el banco.</p>
+                    </div>
                 </div>
             </div>
         </section>
@@ -1004,7 +1273,7 @@
              :class="{
                  'max-w-lg': tamanioModal === 'pequeno',
                  'max-w-2xl': tamanioModal === 'normal',
-                 'max-w-4xl': tamanioModal === 'grande'
+                 'max-w-5xl modal-scaled-grande': tamanioModal === 'grande'
              }">
             
             <!-- ENCABEZADO CON SELECTOR DE TAMAÑO (PEQUEÑO / NORMAL / GRANDE) -->
@@ -1159,7 +1428,7 @@
                         📱 En celular se adapta automáticamente al 100% de la pantalla.
                     </div>
                     <div class="flex items-center space-x-2 w-full sm:w-auto justify-end">
-                        <button type="button" @click="openModalCuenta = false" class="px-4 py-2 text-xs text-slate-400 hover:text-white">Cancelar</button>
+                        <button type="button" @click="openModalCuenta = false" class="btn-cancelar px-4 py-2 text-xs text-slate-400 hover:text-white">Cancelar</button>
                         <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition shadow-lg" x-text="cuentaEnEdicion ? 'Actualizar Cuenta y Logos' : 'Guardar Cuenta'"></button>
                     </div>
                 </div>
@@ -1167,59 +1436,102 @@
         </div>
     </div>
 
-    <!-- MODAL: GESTIÓN DE USUARIOS Y PIN -->
-    <div x-show="openModalUsuarios" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" x-cloak>
-        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4">
-            <div class="flex justify-between items-center">
-                <h3 class="text-base font-bold text-white">👥 Control de Usuarios y PIN</h3>
-                <button @click="openModalUsuarios = false" class="text-slate-400 hover:text-white text-sm">✕</button>
+    <!-- MODAL: GESTIÓN DE USUARIOS, ROLES Y CUENTAS PERMITIDAS -->
+    <div x-show="openModalUsuarios" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-sm" x-cloak>
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-xl w-full p-5 sm:p-6 shadow-2xl space-y-4 overflow-y-auto max-h-[92vh]">
+            <div class="flex justify-between items-center pb-2 border-b border-slate-800">
+                <div>
+                    <h3 class="text-base font-bold text-white">👥 Control de Usuarios y Permisos de Cuentas</h3>
+                    <p class="text-xs text-slate-400">Asigna a cada operador o contador únicamente las cuentas bancarias que podrá ver y operar.</p>
+                </div>
+                <button @click="openModalUsuarios = false; cancelarEdicionUsuario();" class="text-slate-400 hover:text-white text-sm">✕</button>
             </div>
-            
-            <p class="text-xs text-slate-400">Permite dar acceso desde celulares a operadores o contadores con su propio PIN.</p>
 
-            <!-- Formulario Crear Usuario -->
-            <form @submit.prevent="guardarNuevoUsuario" class="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-3">
-                <h4 class="text-xs font-bold text-emerald-400 uppercase">➕ Registrar Nuevo Usuario</h4>
-                <div class="grid grid-cols-2 gap-2.5">
+            <!-- Formulario Crear o Modificar Usuario -->
+            <form @submit.prevent="guardarNuevoUsuario" class="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
+                <div class="flex justify-between items-center">
+                    <h4 class="text-xs font-bold text-emerald-400 uppercase" x-text="usuarioEnEdicion ? '✏️ Modificar Usuario y Cuentas Asignadas' : '➕ Registrar Nuevo Usuario'"></h4>
+                    <button x-show="usuarioEnEdicion" type="button" @click="cancelarEdicionUsuario()" class="text-[11px] text-slate-400 hover:text-white underline">Cancelar edición</button>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <div>
-                        <label class="block text-[11px] text-slate-400 mb-0.5">Usuario (Login)</label>
-                        <input type="text" x-model="nuevoUsuario.username" required placeholder="ej. juan" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
+                        <label class="block text-[11px] text-slate-400 mb-0.5">Usuario (Login) *</label>
+                        <input type="text" x-model="nuevoUsuario.username" :readonly="!!usuarioEnEdicion" :class="usuarioEnEdicion ? 'bg-slate-800 text-slate-400 cursor-not-allowed' : 'bg-slate-900 text-white'" required placeholder="ej. contador" class="w-full border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
                     </div>
                     <div>
-                        <label class="block text-[11px] text-slate-400 mb-0.5">Nombre Completo</label>
-                        <input type="text" x-model="nuevoUsuario.nombre" required placeholder="Juan Pérez" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
+                        <label class="block text-[11px] text-slate-400 mb-0.5">Nombre Completo *</label>
+                        <input type="text" x-model="nuevoUsuario.nombre" required placeholder="Ej. Juan Pérez" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-2.5">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <div>
-                        <label class="block text-[11px] text-slate-400 mb-0.5">PIN Numérico (4-8 dígitos)</label>
-                        <input type="password" inputmode="numeric" maxlength="8" x-model="nuevoUsuario.pin" required placeholder="1234" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono">
+                        <label class="block text-[11px] text-slate-400 mb-0.5" x-text="usuarioEnEdicion ? 'Nuevo PIN (Dejar vacío para no cambiar)' : 'PIN Numérico (4-8 dígitos) *'"></label>
+                        <input type="password" inputmode="numeric" maxlength="8" x-model="nuevoUsuario.pin" :required="!usuarioEnEdicion" placeholder="••••" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono">
                     </div>
                     <div>
-                        <label class="block text-[11px] text-slate-400 mb-0.5">Rol</label>
+                        <label class="block text-[11px] text-slate-400 mb-0.5">Rol de Acceso *</label>
                         <select x-model="nuevoUsuario.rol" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white">
-                            <option value="OPERADOR">Operador (Captura)</option>
-                            <option value="ADMIN">Administrador</option>
+                            <option value="OPERADOR">Operador / Captura (Solo Cuentas Seleccionadas)</option>
+                            <option value="ADMIN">Administrador (Acceso Total y Configuración)</option>
                         </select>
                     </div>
                 </div>
 
-                <div class="text-right">
-                    <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-3 py-1.5 rounded-lg">Guardar Usuario</button>
+                <!-- SELECCIÓN DE CUENTAS CON ACCESO (SOLO CUANDO ES OPERADOR) -->
+                <div x-show="nuevoUsuario.rol === 'OPERADOR'" class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+                    <div class="flex justify-between items-center">
+                        <label class="text-xs font-bold text-sky-400">💳 Cuentas con Acceso Permitido:</label>
+                        <div class="space-x-2 text-[10px]">
+                            <button type="button" @click="nuevoUsuario.cuentas_permitidas = cuentas.map(c => c.id)" class="text-emerald-400 hover:underline font-semibold">Marcar todas</button>
+                            <button type="button" @click="nuevoUsuario.cuentas_permitidas = []" class="text-slate-400 hover:underline">Limpiar</button>
+                        </div>
+                    </div>
+                    <p class="text-[10px] text-slate-400">Selecciona las cuentas a las que este usuario tendrá acceso total. Las cuentas NO marcadas permanecerán ocultas y bloqueadas para él.</p>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-40 overflow-y-auto pr-1 pt-1">
+                        <template x-for="cta in cuentas" :key="cta.id">
+                            <label class="flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition text-xs"
+                                   :class="nuevoUsuario.cuentas_permitidas && nuevoUsuario.cuentas_permitidas.includes(cta.id) ? 'bg-emerald-950/40 border-emerald-600/80 text-white' : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800/70'">
+                                <input type="checkbox" :checked="nuevoUsuario.cuentas_permitidas && nuevoUsuario.cuentas_permitidas.includes(cta.id)" @change="toggleCuentaPermitida(cta.id)" class="rounded text-emerald-500 focus:ring-emerald-400 w-4 h-4">
+                                <div class="min-w-0 flex-1">
+                                    <div class="font-bold truncate text-[11px]" x-text="cta.banco + ' · ' + cta.nombre"></div>
+                                    <div class="text-[10px] font-mono text-slate-500" x-text="'Cuenta: *' + (cta.numero_cuenta ? cta.numero_cuenta.slice(-4) : '')"></div>
+                                </div>
+                            </label>
+                        </template>
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-1">
+                    <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-xl shadow transition" x-text="usuarioEnEdicion ? '💾 Actualizar Usuario y Permisos' : '➕ Guardar Usuario'"></button>
                 </div>
             </form>
 
             <!-- Lista de Usuarios Existentes -->
-            <div class="space-y-1.5 max-h-48 overflow-y-auto">
+            <div class="space-y-2 max-h-56 overflow-y-auto">
+                <h4 class="text-[11px] font-bold uppercase text-slate-400 tracking-wider">Usuarios Activos</h4>
                 <template x-for="u in listaUsuarios" :key="u.id">
-                    <div class="flex justify-between items-center p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs">
-                        <div>
-                            <span class="font-bold text-white" x-text="u.nombre"></span>
-                            <span class="text-slate-400 font-mono ml-1" x-text="'(@' + u.username + ')'"></span>
-                            <span class="px-1.5 py-0.2 rounded text-[10px] ml-1" :class="u.rol === 'ADMIN' ? 'bg-amber-950 text-amber-300' : 'bg-slate-800 text-slate-300'" x-text="u.rol"></span>
+                    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs">
+                        <div class="space-y-1">
+                            <div class="flex items-center gap-1.5 flex-wrap">
+                                <span class="font-bold text-white" x-text="u.nombre"></span>
+                                <span class="text-slate-400 font-mono text-[11px]" x-text="'(@' + u.username + ')'"></span>
+                                <span class="px-1.5 py-0.5 rounded text-[10px] font-bold" :class="u.rol === 'ADMIN' ? 'bg-amber-950 text-amber-300 border border-amber-800/60' : 'bg-sky-950 text-sky-300 border border-sky-800/60'" x-text="u.rol === 'ADMIN' ? 'ADMINISTRADOR' : 'OPERADOR (CAPTURA)'"></span>
+                            </div>
+                            <div x-show="u.rol !== 'ADMIN'" class="text-[11px] text-slate-400">
+                                <span class="text-slate-500">Cuentas asignadas:</span>
+                                <span class="text-emerald-400 font-semibold" x-text="obtenerNombresCuentasUsuario(u)"></span>
+                            </div>
+                            <div x-show="u.rol === 'ADMIN'" class="text-[10px] text-amber-400/80">
+                                Acceso total a todas las cuentas y configuración del sistema.
+                            </div>
                         </div>
-                        <button x-show="u.username !== 'admin'" @click="eliminarUsuario(u)" class="text-rose-400 hover:text-rose-300 text-xs">Desactivar</button>
+                        <div class="flex items-center gap-2 self-end sm:self-center shrink-0">
+                            <button type="button" @click="editarUsuario(u)" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[11px] border border-slate-700">✏️ Editar</button>
+                            <button x-show="u.username !== 'admin'" type="button" @click="eliminarUsuario(u)" class="px-2.5 py-1 bg-rose-950/50 hover:bg-rose-900/70 text-rose-300 rounded-lg text-[11px] border border-rose-800/60">Desactivar</button>
+                        </div>
                     </div>
                 </template>
             </div>
@@ -1262,7 +1574,7 @@
              :class="{
                  'max-w-lg': tamanioModal === 'pequeno',
                  'max-w-2xl': tamanioModal === 'normal',
-                 'max-w-4xl': tamanioModal === 'grande'
+                 'max-w-5xl modal-scaled-grande': tamanioModal === 'grande'
              }">
             
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-2.5 border-b border-slate-800">
@@ -1285,7 +1597,7 @@
                     <div>
                         <label class="block text-xs font-semibold text-slate-300 mb-1">Cuenta Bancaria *</label>
                         <select x-model="editarTransForm.cuenta_id" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
-                            <template x-for="cta in cuentas" :key="cta.id">
+                            <template x-for="cta in cuentasPermitidas" :key="cta.id">
                                 <option :value="cta.id" x-text="formatCuentaLabel(cta)"></option>
                             </template>
                         </select>
@@ -1619,11 +1931,27 @@
                     moneda: 'MXN'
                 },
 
+                usuarioEnEdicion: null,
                 nuevoUsuario: {
+                    id: null,
                     username: '',
                     nombre: '',
                     pin: '',
-                    rol: 'OPERADOR'
+                    rol: 'OPERADOR',
+                    cuentas_permitidas: []
+                },
+
+                archivosEstadoCuenta: [],
+                filtroEdoCuentaId: '',
+                filtroEdoAnio: '',
+                filtroEdoMes: '',
+                subiendoEdoPdf: false,
+                edoPdfForm: {
+                    cuenta_id: '',
+                    anio: new Date().getFullYear(),
+                    mes: new Date().getMonth() + 1,
+                    notas: '',
+                    file: null
                 },
 
                 filtros: {
@@ -1761,16 +2089,33 @@
                     await this.cargarCategorias();
                     await this.cargarEntidades();
                     await this.filtrarTransacciones();
+                    await this.cargarArchivosEstadoCuenta();
                 },
 
                 async cargarCuentas() {
                     const res = await fetch('/api/cuentas');
                     if (res.ok) {
                         this.cuentas = await res.json();
-                        if (this.cuentas.length > 0 && !this.form.cuenta_id) {
-                            this.form.cuenta_id = this.cuentas[0].id;
-                            this.pdfCuentaId = this.cuentas[0].id;
-                            this.corteCuentaId = this.cuentas[0].id;
+                        const disp = this.cuentasPermitidas;
+                        if (disp.length > 0) {
+                            const ids = disp.map(c => c.id);
+                            if (!this.form.cuenta_id || !ids.includes(Number(this.form.cuenta_id))) {
+                                this.form.cuenta_id = disp[0].id;
+                            }
+                            if (!this.pdfCuentaId || !ids.includes(Number(this.pdfCuentaId))) {
+                                this.pdfCuentaId = disp[0].id;
+                            }
+                            if (!this.corteCuentaId || !ids.includes(Number(this.corteCuentaId))) {
+                                this.corteCuentaId = disp[0].id;
+                            }
+                            if (!this.edoPdfForm.cuenta_id || !ids.includes(Number(this.edoPdfForm.cuenta_id))) {
+                                this.edoPdfForm.cuenta_id = disp[0].id;
+                            }
+                        } else {
+                            this.form.cuenta_id = '';
+                            this.pdfCuentaId = '';
+                            this.corteCuentaId = '';
+                            this.edoPdfForm.cuenta_id = '';
                         }
                     }
                 },
@@ -1788,6 +2133,24 @@
                 async cargarUsuarios() {
                     const res = await fetch('/api/usuarios');
                     if (res.ok) this.listaUsuarios = await res.json();
+                },
+
+                get cuentasPermitidas() {
+                    if (!this.usuarioActual) return [];
+                    if (this.usuarioActual.rol === 'ADMIN') return this.cuentas;
+                    const permitidas = (this.usuarioActual.cuentas_permitidas || []).map(Number);
+                    return this.cuentas.filter(c => permitidas.includes(Number(c.id)));
+                },
+
+                get archivosEstadoCuentaFiltrados() {
+                    const idsPermitidos = this.cuentasPermitidas.map(c => Number(c.id));
+                    return this.archivosEstadoCuenta.filter(a => {
+                        if (!idsPermitidos.includes(Number(a.cuenta_id))) return false;
+                        if (this.filtroEdoCuentaId && Number(a.cuenta_id) !== Number(this.filtroEdoCuentaId)) return false;
+                        if (this.filtroEdoAnio && Number(a.anio) !== Number(this.filtroEdoAnio)) return false;
+                        if (this.filtroEdoMes && Number(a.mes) !== Number(this.filtroEdoMes)) return false;
+                        return true;
+                    });
                 },
 
                 get categoriasFiltradas() {
@@ -2097,19 +2460,98 @@
                     }
                 },
 
-                async guardarNuevoUsuario() {
-                    const res = await fetch('/api/usuarios', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(this.nuevoUsuario)
-                    });
-                    if (res.ok) {
-                        alert('✅ Usuario creado exitosamente.');
-                        this.nuevoUsuario = { username: '', nombre: '', pin: '', rol: 'OPERADOR' };
-                        await this.cargarUsuarios();
+                toggleCuentaPermitida(cuentaId) {
+                    const id = Number(cuentaId);
+                    if (!Array.isArray(this.nuevoUsuario.cuentas_permitidas)) {
+                        this.nuevoUsuario.cuentas_permitidas = [];
+                    }
+                    const idx = this.nuevoUsuario.cuentas_permitidas.indexOf(id);
+                    if (idx === -1) {
+                        this.nuevoUsuario.cuentas_permitidas.push(id);
                     } else {
-                        const err = await res.json();
-                        alert(err.detail || 'Error al crear usuario.');
+                        this.nuevoUsuario.cuentas_permitidas.splice(idx, 1);
+                    }
+                },
+
+                obtenerNombresCuentasUsuario(u) {
+                    const ids = (u.cuentas_permitidas || []).map(Number);
+                    if (ids.length === 0) return 'Ninguna asignada';
+                    const nombres = this.cuentas
+                        .filter(c => ids.includes(Number(c.id)))
+                        .map(c => `${c.banco} (${c.nombre})`);
+                    return nombres.length > 0 ? nombres.join(', ') : 'Ninguna activa';
+                },
+
+                editarUsuario(u) {
+                    this.usuarioEnEdicion = u.id;
+                    this.nuevoUsuario = {
+                        id: u.id,
+                        username: u.username,
+                        nombre: u.nombre,
+                        pin: '',
+                        rol: u.rol,
+                        cuentas_permitidas: Array.isArray(u.cuentas_permitidas) ? u.cuentas_permitidas.map(Number) : []
+                    };
+                },
+
+                cancelarEdicionUsuario() {
+                    this.usuarioEnEdicion = null;
+                    this.nuevoUsuario = {
+                        id: null,
+                        username: '',
+                        nombre: '',
+                        pin: '',
+                        rol: 'OPERADOR',
+                        cuentas_permitidas: []
+                    };
+                },
+
+                async guardarNuevoUsuario() {
+                    if (this.nuevoUsuario.rol === 'OPERADOR' && (!this.nuevoUsuario.cuentas_permitidas || this.nuevoUsuario.cuentas_permitidas.length === 0)) {
+                        if (!confirm('⚠️ No has seleccionado ninguna cuenta para este operador. ¿Deseas guardarlo sin acceso a cuentas por ahora?')) {
+                            return;
+                        }
+                    }
+
+                    if (this.usuarioEnEdicion) {
+                        const payload = {
+                            nombre: this.nuevoUsuario.nombre,
+                            rol: this.nuevoUsuario.rol,
+                            cuentas_permitidas: this.nuevoUsuario.cuentas_permitidas || []
+                        };
+                        if (this.nuevoUsuario.pin && this.nuevoUsuario.pin.trim()) {
+                            payload.pin = this.nuevoUsuario.pin.trim();
+                        }
+                        const res = await fetch(`/api/usuarios/${this.usuarioEnEdicion}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        if (res.ok) {
+                            alert('✅ Usuario y permisos de cuentas actualizados con éxito.');
+                            this.cancelarEdicionUsuario();
+                            await this.cargarUsuarios();
+                            if (this.usuarioActual && Number(this.usuarioActual.id) === Number(payload.id)) {
+                                await this.verificarToken();
+                            }
+                        } else {
+                            const err = await res.json();
+                            alert(err.detail || 'Error al actualizar usuario.');
+                        }
+                    } else {
+                        const res = await fetch('/api/usuarios', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(this.nuevoUsuario)
+                        });
+                        if (res.ok) {
+                            alert('✅ Usuario registrado exitosamente con sus cuentas autorizadas.');
+                            this.cancelarEdicionUsuario();
+                            await this.cargarUsuarios();
+                        } else {
+                            const err = await res.json();
+                            alert(err.detail || 'Error al crear usuario.');
+                        }
                     }
                 },
 
@@ -2326,7 +2768,25 @@
                         fetch(`/api/reportes/resumen?${params.toString()}`)
                     ]);
 
-                    if (resTr.ok) this.transacciones = await resTr.json();
+                    if (resTr.ok) {
+                        let todas = await resTr.json();
+                        if (this.usuarioActual && this.usuarioActual.rol !== 'ADMIN') {
+                            const idsPermitidos = (this.usuarioActual.cuentas_permitidas || []).map(Number);
+                            todas = todas.filter(t => idsPermitidos.includes(Number(t.cuenta_id)));
+                        }
+                        this.transacciones = todas;
+
+                        if (!this.filtros.cuenta_id && this.usuarioActual && this.usuarioActual.rol !== 'ADMIN') {
+                            const ent = todas.filter(t => t.tipo === 'ENTRADA').reduce((s, t) => s + parseFloat(t.monto), 0);
+                            const sal = todas.filter(t => t.tipo === 'SALIDA').reduce((s, t) => s + parseFloat(t.monto), 0);
+                            this.resumenReporte = {
+                                total_entradas: ent,
+                                total_salidas: sal,
+                                balance_periodo: ent - sal
+                            };
+                            return;
+                        }
+                    }
                     if (resRep.ok) this.resumenReporte = await resRep.json();
                 },
 
@@ -2412,8 +2872,9 @@
                 },
 
                 async generarEstadoCuenta() {
-                    if (!this.corteCuentaId && this.cuentas.length > 0) {
-                        this.corteCuentaId = this.cuentas[0].id;
+                    const disp = this.cuentasPermitidas;
+                    if (!this.corteCuentaId && disp.length > 0) {
+                        this.corteCuentaId = disp[0].id;
                     }
                     if (!this.corteCuentaId) return;
                     this.loadingCorte = true;
@@ -2434,6 +2895,89 @@
 
                 imprimirEstadoCuenta() {
                     window.print();
+                },
+
+                seleccionarPdfEdoCuenta(event) {
+                    this.edoPdfForm.file = event.target.files[0] || null;
+                },
+
+                async cargarArchivosEstadoCuenta() {
+                    try {
+                        const res = await fetch('/api/archivos-estado-cuenta');
+                        if (res.ok) {
+                            this.archivosEstadoCuenta = await res.json();
+                        }
+                    } catch (e) {}
+                },
+
+                async subirArchivoEstadoCuenta() {
+                    if (!this.edoPdfForm.cuenta_id || !this.edoPdfForm.file) {
+                        alert('Selecciona la cuenta bancaria y el archivo PDF.');
+                        return;
+                    }
+                    this.subiendoEdoPdf = true;
+                    try {
+                        const formData = new FormData();
+                        formData.append('cuenta_id', this.edoPdfForm.cuenta_id);
+                        formData.append('anio', this.edoPdfForm.anio);
+                        formData.append('mes', this.edoPdfForm.mes);
+                        if (this.edoPdfForm.notas && this.edoPdfForm.notas.trim()) {
+                            formData.append('notas', this.edoPdfForm.notas.trim());
+                        }
+                        formData.append('file', this.edoPdfForm.file);
+
+                        const res = await fetch('/api/archivos-estado-cuenta', {
+                            method: 'POST',
+                            body: formData
+                        });
+
+                        if (res.ok) {
+                            alert('✅ Estado de cuenta PDF archivado correctamente.');
+                            this.edoPdfForm.notas = '';
+                            this.edoPdfForm.file = null;
+                            const inputEl = document.getElementById('inputPdfEdoCuenta');
+                            if (inputEl) inputEl.value = '';
+                            await this.cargarArchivosEstadoCuenta();
+                        } else {
+                            const err = await res.json();
+                            alert(err.detail || 'Error al subir el estado de cuenta PDF.');
+                        }
+                    } catch (e) {
+                        alert('Error al subir el archivo.');
+                    } finally {
+                        this.subiendoEdoPdf = false;
+                    }
+                },
+
+                async eliminarArchivoEstadoCuenta(a) {
+                    if (!confirm(`¿Estás seguro de eliminar el PDF "${a.nombre_archivo_original}" (${this.getNombreMes(a.mes)} ${a.anio})?`)) {
+                        return;
+                    }
+                    const res = await fetch(`/api/archivos-estado-cuenta/${a.id}`, {
+                        method: 'DELETE'
+                    });
+                    if (res.ok) {
+                        await this.cargarArchivosEstadoCuenta();
+                    } else {
+                        const err = await res.json();
+                        alert(err.detail || 'Error al eliminar el archivo.');
+                    }
+                },
+
+                getNombreMes(mesNum) {
+                    const meses = {
+                        1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril',
+                        5: 'Mayo', 6: 'Junio', 7: 'Julio', 8: 'Agosto',
+                        9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'
+                    };
+                    return meses[Number(mesNum)] || '';
+                },
+
+                formatBytes(bytes) {
+                    const b = Number(bytes) || 0;
+                    if (b === 0) return '0 KB';
+                    if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB';
+                    return (b / (1024 * 1024)).toFixed(2) + ' MB';
                 },
 
                 formatMoney(amount) {

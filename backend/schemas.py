@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Any
 from datetime import date, datetime
 from decimal import Decimal
+import json
 
 # --- CONFIGURACION & BRANDING ---
 class ConfiguracionData(BaseModel):
@@ -19,6 +20,7 @@ class UsuarioCreate(BaseModel):
     nombre: str = Field(..., max_length=100)
     pin: str = Field(..., min_length=4, max_length=8)
     rol: Optional[str] = Field(default="OPERADOR", pattern="^(ADMIN|OPERADOR)$")
+    cuentas_permitidas: Optional[List[int]] = Field(default_factory=list)
 
     @field_validator("pin")
     @classmethod
@@ -28,13 +30,45 @@ class UsuarioCreate(BaseModel):
             raise ValueError("El PIN debe contener únicamente dígitos numéricos (ej. 1234).")
         return v
 
+class UsuarioUpdate(BaseModel):
+    nombre: Optional[str] = Field(None, max_length=100)
+    pin: Optional[str] = Field(None, min_length=4, max_length=8)
+    rol: Optional[str] = Field(None, pattern="^(ADMIN|OPERADOR)$")
+    activo: Optional[bool] = None
+    cuentas_permitidas: Optional[List[int]] = None
+
+    @field_validator("pin")
+    @classmethod
+    def validar_pin_opcional(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v.strip():
+            v = v.strip()
+            if not v.isdigit():
+                raise ValueError("El PIN debe contener únicamente dígitos numéricos (ej. 1234).")
+            return v
+        return None
+
 class UsuarioResponse(BaseModel):
     id: int
     username: str
     nombre: str
     rol: str
+    cuentas_permitidas: List[int] = Field(default_factory=list)
     activo: bool
     created_at: Optional[datetime] = None
+
+    @field_validator("cuentas_permitidas", mode="before")
+    @classmethod
+    def parse_cuentas_permitidas(cls, v: Any) -> List[int]:
+        if isinstance(v, list):
+            return [int(x) for x in v if str(x).isdigit()]
+        if isinstance(v, str):
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return [int(x) for x in parsed if str(x).isdigit()]
+            except Exception:
+                pass
+        return []
 
     class Config:
         from_attributes = True
@@ -42,6 +76,25 @@ class UsuarioResponse(BaseModel):
 class AuthResponse(BaseModel):
     token: str
     usuario: UsuarioResponse
+
+# --- ESTADOS DE CUENTA BANCARIOS (ARCHIVOS PDF) ---
+class EstadoCuentaArchivoResponse(BaseModel):
+    id: int
+    cuenta_id: int
+    anio: int
+    mes: int
+    nombre_archivo_original: str
+    nombre_archivo_almacenado: str
+    ruta_archivo: str
+    tamano_bytes: int = 0
+    notas: Optional[str] = None
+    created_at: Optional[datetime] = None
+    cuenta_nombre: Optional[str] = None
+    cuenta_banco: Optional[str] = None
+    cuenta_numero: Optional[str] = None
+
+    class Config:
+        from_attributes = True
 
 # --- CUENTAS ---
 class CuentaBase(BaseModel):

@@ -1,4 +1,5 @@
 import os
+import json
 import hashlib
 import secrets
 import calendar
@@ -15,15 +16,15 @@ from datetime import date
 from decimal import Decimal
 
 from .database import engine, Base, get_db
-from .models import Cuenta, Categoria, Entidad, Transaccion, Usuario, Configuracion
+from .models import Cuenta, Categoria, Entidad, Transaccion, Usuario, Configuracion, EstadoCuentaArchivo
 from .schemas import (
     CuentaCreate, CuentaUpdate, CuentaResponse,
     CategoriaCreate, CategoriaUpdate, CategoriaResponse,
     EntidadCreate, EntidadUpdate, EntidadResponse,
     TransaccionCreate, TransaccionUpdate, TransaccionResponse,
     MovimientoExtraido, BatchImportConfirm,
-    UsuarioLogin, UsuarioCreate, UsuarioResponse, AuthResponse,
-    ConfiguracionData
+    UsuarioLogin, UsuarioCreate, UsuarioUpdate, UsuarioResponse, AuthResponse,
+    ConfiguracionData, EstadoCuentaArchivoResponse
 )
 from .parsers.bank_pdf_parser import extract_movements_from_pdf
 
@@ -225,12 +226,36 @@ def crear_usuario(payload: UsuarioCreate, db: Session = Depends(get_db)):
         nombre=payload.nombre.strip(),
         pin_hash=hash_pin(payload.pin.strip()),
         rol=payload.rol or "OPERADOR",
+        cuentas_permitidas=json.dumps(payload.cuentas_permitidas or []),
         activo=True
     )
     db.add(nuevo)
     db.commit()
     db.refresh(nuevo)
     return nuevo
+
+@app.put("/api/usuarios/{usuario_id}", response_model=UsuarioResponse)
+def actualizar_usuario(usuario_id: int, payload: UsuarioUpdate, db: Session = Depends(get_db)):
+    user = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+
+    if payload.nombre is not None:
+        user.nombre = payload.nombre.strip()
+    if payload.pin is not None and payload.pin.strip():
+        user.pin_hash = hash_pin(payload.pin.strip())
+    if payload.rol is not None:
+        if user.username == "admin" and payload.rol != "ADMIN":
+            raise HTTPException(status_code=400, detail="El administrador principal siempre debe mantener rol ADMIN.")
+        user.rol = payload.rol
+    if payload.activo is not None:
+        user.activo = payload.activo
+    if payload.cuentas_permitidas is not None:
+        user.cuentas_permitidas = json.dumps(payload.cuentas_permitidas)
+
+    db.commit()
+    db.refresh(user)
+    return user
 
 @app.delete("/api/usuarios/{usuario_id}")
 def eliminar_usuario(usuario_id: int, db: Session = Depends(get_db)):
@@ -878,6 +903,130 @@ def generar_estado_cuenta_mensual(
         "movimientos": movimientos_formateados,
         "desglose_categorias": desglose_categorias
     }
+
+# ====================================================================================================
+# ARCHIVOS DE ESTADOS DE CUENTA (PDFS OFICIALES POR CUENTA, AÑO Y MES)
+# ====================================================================================================
+STORAGE_EDOS_DIR = os.path.join(os.path.dirname(__file__), "storage", "estados_cuenta")
+os.makedirs(STORAGE_EDOS_DIR, exist_ok=True)
+
+@app.post("/api/archivos-estado-cuenta", response_model=EstadoCuentaArchivoResponse)
+async def subir_archivo_estado_cuenta(
+    cuenta_id: int = Form(...),
+    anio: int = Form(...),
+    mes: int = Form(...),
+    notas: Optional[str] = Form(None),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    cuenta = db.query(Cuenta).filter(Cuenta.id == cuenta_id).first()
+    if not cuenta:
+        raise HTTPException(status_code=404, detail="Cuenta bancaria no encontrada.")
+
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No se seleccionó ningún archivo.")
+
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext != ".pdf":
+        raise HTTPException(status_code=400, detail="Únicamente se permiten archivos PDF del Estado de Cuenta Bancario.")
+
+    clean_filename = f"edo_{cuenta_id}_{anio}_{int(mes):02d}_{secrets.token_hex(4)}.pdf"
+    file_path = os.path.join(STORAGE_EDOS_DIR, clean_filename)
+
+    content = await file.read()
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    nuevo_archivo = EstadoCuentaArchivo(
+        cuenta_id=cuenta_id,
+        anio=anio,
+        mes=mes,
+        nombre_archivo_original=file.filename,
+        nombre_archivo_almacenado=clean_filename,
+        ruta_archivo=file_path,
+        tamano_bytes=len(content),
+        notas=notas.strip() if notas else None
+    )
+    db.add(nuevo_archivo)
+    db.commit()
+    db.refresh(nuevo_archivo)
+
+    res = EstadoCuentaArchivoResponse.model_validate(nuevo_archivo)
+    res.cuenta_nombre = cuenta.nombre
+    res.cuenta_banco = cuenta.banco
+    res.cuenta_numero = cuenta.numero_cuenta
+    return res
+
+@app.get("/api/archivos-estado-cuenta", response_model=List[EstadoCuentaArchivoResponse])
+def listar_archivos_estado_cuenta(
+    cuenta_id: Optional[int] = None,
+    anio: Optional[int] = None,
+    mes: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    query = db.query(EstadoCuentaArchivo).join(Cuenta, EstadoCuentaArchivo.cuenta_id == Cuenta.id)
+    if cuenta_id:
+        query = query.filter(EstadoCuentaArchivo.cuenta_id == cuenta_id)
+    if anio:
+        query = query.filter(EstadoCuentaArchivo.anio == anio)
+    if mes:
+        query = query.filter(EstadoCuentaArchivo.mes == mes)
+
+    archivos = query.order_by(EstadoCuentaArchivo.anio.desc(), EstadoCuentaArchivo.mes.desc(), EstadoCuentaArchivo.id.desc()).all()
+    resultado = []
+    for a in archivos:
+        item = EstadoCuentaArchivoResponse.model_validate(a)
+        if a.cuenta:
+            item.cuenta_nombre = a.cuenta.nombre
+            item.cuenta_banco = a.cuenta.banco
+            item.cuenta_numero = a.cuenta.numero_cuenta
+        resultado.append(item)
+    return resultado
+
+@app.get("/api/archivos-estado-cuenta/{archivo_id}/descargar")
+def descargar_archivo_estado_cuenta(archivo_id: int, db: Session = Depends(get_db)):
+    archivo = db.query(EstadoCuentaArchivo).filter(EstadoCuentaArchivo.id == archivo_id).first()
+    if not archivo:
+        raise HTTPException(status_code=404, detail="Archivo de estado de cuenta no encontrado.")
+
+    if not os.path.exists(archivo.ruta_archivo):
+        raise HTTPException(status_code=404, detail="El archivo físico no se encuentra en el servidor.")
+
+    return FileResponse(
+        path=archivo.ruta_archivo,
+        filename=archivo.nombre_archivo_original,
+        media_type="application/pdf"
+    )
+
+@app.get("/api/archivos-estado-cuenta/{archivo_id}/ver")
+def ver_archivo_estado_cuenta_inline(archivo_id: int, db: Session = Depends(get_db)):
+    archivo = db.query(EstadoCuentaArchivo).filter(EstadoCuentaArchivo.id == archivo_id).first()
+    if not archivo:
+        raise HTTPException(status_code=404, detail="Archivo de estado de cuenta no encontrado.")
+
+    if not os.path.exists(archivo.ruta_archivo):
+        raise HTTPException(status_code=404, detail="El archivo físico no se encuentra en el servidor.")
+
+    return FileResponse(
+        path=archivo.ruta_archivo,
+        media_type="application/pdf"
+    )
+
+@app.delete("/api/archivos-estado-cuenta/{archivo_id}")
+def eliminar_archivo_estado_cuenta(archivo_id: int, db: Session = Depends(get_db)):
+    archivo = db.query(EstadoCuentaArchivo).filter(EstadoCuentaArchivo.id == archivo_id).first()
+    if not archivo:
+        raise HTTPException(status_code=404, detail="Archivo no encontrado.")
+
+    try:
+        if os.path.exists(archivo.ruta_archivo):
+            os.remove(archivo.ruta_archivo)
+    except Exception:
+        pass
+
+    db.delete(archivo)
+    db.commit()
+    return {"message": "Archivo eliminado con éxito."}
 
 # Montar frontend estático
 frontend_dir = os.path.join(os.path.dirname(__file__), "..", "frontend", "static")
