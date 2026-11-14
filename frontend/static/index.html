@@ -3266,7 +3266,10 @@
                         const res = await fetch('/api/auth/login', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(this.loginForm)
+                            body: JSON.stringify({
+                                username: (this.loginForm.username || '').trim(),
+                                pin: (this.loginForm.pin || '').trim()
+                            })
                         });
                         if (res.ok) {
                             const data = await res.json();
@@ -3275,9 +3278,11 @@
                             localStorage.setItem('hyma_token', data.token);
                             await this.recargarTodo();
                         } else {
-                            const err = await res.json();
+                            const err = await res.json().catch(() => ({}));
                             this.loginError = err.detail || 'Usuario o PIN incorrecto.';
                         }
+                    } catch (e) {
+                        this.loginError = 'No se pudo conectar con el servidor. Recarga la página (F5) e intenta de nuevo.';
                     } finally {
                         this.loading = false;
                     }
