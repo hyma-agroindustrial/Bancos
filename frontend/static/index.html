@@ -656,6 +656,28 @@
                                     </div>
                                 </div>
                             </template>
+
+                            <!-- Submenú: REPORTES DE BANCOS (Concentrado General de Todas las Cuentas) -->
+                            <div class="pt-1.5 border-t border-slate-800">
+                                <button type="button"
+                                        @click="abrirReporteBancos()"
+                                        class="w-full px-3 py-3 rounded-xl flex items-center justify-between text-left transition shadow-sm"
+                                        :class="vistaReporteBancos ? 'bg-emerald-950/80 border-2 border-emerald-500' : 'bg-slate-800/80 hover:bg-slate-800 border border-slate-700'">
+                                    <div class="flex items-center gap-2.5 min-w-0">
+                                        <div class="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm text-sm">
+                                            📊
+                                        </div>
+                                        <div class="truncate">
+                                            <span class="text-xs font-black text-white uppercase tracking-wide block truncate">Reportes de Bancos</span>
+                                            <span class="text-[10px] font-mono text-emerald-400 font-bold block" x-text="'Gran Total Disponible: ' + formatMoney(granTotalDisponibleBancos)"></span>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-1.5 shrink-0">
+                                        <span class="text-[10px] font-mono font-semibold text-slate-400" x-text="cuentasPermitidas.length + ' cta(s)'"></span>
+                                        <span class="text-xs text-emerald-400 font-bold">▸</span>
+                                    </div>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -703,8 +725,164 @@
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-6">
 
-        <!-- 1. BANCO ACTIVO EN PANTALLA PRINCIPAL (SOLO MUESTRA LA CUENTA SELECCIONADA) -->
-        <section class="no-print">
+        <!-- 1-A. PANTALLA DE REPORTES DE BANCOS (CONCENTRADO DE TODAS LAS CUENTAS + GRAN TOTAL DISPONIBLE) -->
+        <section x-show="vistaReporteBancos" x-cloak class="space-y-5">
+            <!-- Barra superior del Concentrado -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div class="flex items-center gap-2.5">
+                    <span class="text-lg">📊</span>
+                    <div>
+                        <h2 class="text-sm sm:text-base font-black uppercase tracking-wider text-white">Reportes de Bancos · Concentrado General</h2>
+                        <p class="text-xs text-slate-400">Resumen financiero consolidado y estado actual de todas las cuentas bancarias activas</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 no-print">
+                    <button type="button"
+                            @click="window.print()"
+                            class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-2 rounded-xl font-bold transition flex items-center gap-1.5 shadow-sm">
+                        <span>🖨️</span>
+                        <span>Imprimir Concentrado</span>
+                    </button>
+                    <button type="button"
+                            @click="vistaReporteBancos = false"
+                            class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500 px-3.5 py-2 rounded-xl font-bold transition flex items-center gap-1.5 shadow-sm">
+                        <span>←</span>
+                        <span>Volver al Banco Activo</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- CUADRO RESUMEN: EL GRAN TOTAL DISPONIBLE (SUMA DE TODAS LAS CUENTAS) -->
+            <div class="bg-slate-900 border-2 border-emerald-500/60 rounded-2xl p-5 sm:p-6 shadow-xl">
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                    <!-- Gran Total Disponible Principal -->
+                    <div class="space-y-1">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800/80">Concentrado General</span>
+                            <span class="text-xs font-mono text-slate-400 font-semibold" x-text="cuentasPermitidas.length + ' cuentas bancarias sumadas'"></span>
+                        </div>
+                        <p class="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-300 pt-1">El Gran Total Disponible (Suma de Todas las Cuentas)</p>
+                        <p class="text-3xl sm:text-4xl font-black font-mono tracking-tight"
+                           :class="granTotalDisponibleBancos >= 0 ? 'text-emerald-400' : 'text-rose-400'"
+                           x-text="formatMoney(granTotalDisponibleBancos)"></p>
+                    </div>
+
+                    <!-- Desglose Global de Entradas / Salidas y Subtotales por Empresa -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 lg:min-w-[420px]">
+                        <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3.5">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Total Entradas Acumuladas</span>
+                            <span class="text-base sm:text-lg font-black font-mono text-emerald-400 mt-0.5 block" x-text="'+ ' + formatMoney(granTotalEntradasBancos)"></span>
+                        </div>
+                        <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3.5">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Total Salidas Acumuladas</span>
+                            <span class="text-base sm:text-lg font-black font-mono text-rose-400 mt-0.5 block" x-text="'- ' + formatMoney(granTotalSalidasBancos)"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Subtotales por Empresa en el Concentrado -->
+                <div class="mt-5 pt-4 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <template x-for="grupo in bancosAgrupadosPorEmpresa" :key="'res-' + grupo.empresa">
+                        <div class="bg-slate-950/80 border border-slate-800 rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-2">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <div class="w-7 h-7 rounded-lg bg-slate-900 border border-slate-700 p-0.5 flex items-center justify-center shrink-0 overflow-hidden">
+                                    <template x-if="grupo.logo_empresa">
+                                        <img :src="grupo.logo_empresa" class="w-full h-full object-contain">
+                                    </template>
+                                    <template x-if="!grupo.logo_empresa">
+                                        <span class="text-xs">🏢</span>
+                                    </template>
+                                </div>
+                                <div class="truncate">
+                                    <span class="text-xs font-black text-white uppercase block truncate" x-text="grupo.empresa"></span>
+                                    <span class="text-[10px] font-mono text-slate-400" x-text="grupo.cuentas.length + ' cuenta(s)'"></span>
+                                </div>
+                            </div>
+                            <div class="text-right shrink-0">
+                                <span class="text-xs sm:text-sm font-black font-mono"
+                                      :class="grupo.subtotal >= 0 ? 'text-emerald-400' : 'text-rose-400'"
+                                      x-text="formatMoney(grupo.subtotal)"></span>
+                                <span class="text-[9px] text-slate-400 block">Subtotal Empresa</span>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- CUADRÍCULA CON TODOS LOS BANCOS ACTIVOS -->
+            <div>
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Desglose de Todas las Cuentas Bancarias (<span x-text="cuentasPermitidas.length"></span>)</h3>
+                    <span class="text-[11px] text-slate-400 no-print">Haz clic en cualquier banco para seleccionarlo como cuenta activa</span>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <template x-for="cta in cuentasPermitidas" :key="'card-all-' + cta.id">
+                        <div @click="seleccionarBancoActivo(cta)"
+                             class="bg-slate-800/80 border rounded-2xl p-4 shadow-sm transition relative group cursor-pointer"
+                             :class="cuentaActivaPrincipal && Number(cuentaActivaPrincipal.id) === Number(cta.id) ? 'border-2 border-emerald-500' : 'border-slate-700/80 hover:border-emerald-500/60'">
+                            <!-- Acciones: Modificar y Eliminar (Solo ADMIN) -->
+                            <div class="absolute top-3 right-3 flex items-center space-x-1 no-print" x-show="usuarioActual && usuarioActual.rol === 'ADMIN'" @click.stop>
+                                <button @click="abrirModalEditarCuenta(cta)" title="Modificar Datos y Logos de esta Cuenta" class="p-1.5 text-slate-400 hover:text-white bg-slate-900/90 hover:bg-slate-700 rounded-lg text-xs transition border border-slate-700 shadow">
+                                    ✏️
+                                </button>
+                                <button @click="eliminarCuenta(cta)" title="Eliminar Cuenta" class="p-1.5 text-slate-400 hover:text-rose-400 bg-slate-900/90 hover:bg-rose-950 rounded-lg text-xs transition border border-slate-700 shadow">
+                                    🗑️
+                                </button>
+                            </div>
+
+                            <!-- Encabezado con Logo de Empresa + Badge de Banco -->
+                            <div class="flex items-start gap-3 pr-14">
+                                <div class="w-11 h-11 rounded-xl bg-slate-900 border border-slate-700 p-1 flex items-center justify-center shrink-0 overflow-hidden shadow-inner">
+                                    <template x-if="cta.logo_empresa">
+                                        <img :src="cta.logo_empresa" alt="Empresa" class="w-full h-full object-contain rounded">
+                                    </template>
+                                    <template x-if="!cta.logo_empresa && config.logo_url">
+                                        <img :src="config.logo_url" alt="Empresa" class="w-full h-full object-contain rounded">
+                                    </template>
+                                    <template x-if="!cta.logo_empresa && !config.logo_url">
+                                        <span class="text-sm font-bold text-emerald-400">🏢</span>
+                                    </template>
+                                </div>
+
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                        <span class="text-[10px] font-black px-2 py-0.5 rounded shadow-sm flex items-center gap-1 leading-tight"
+                                              :style="'background:' + getBankStyle(cta.banco, cta.logo_banco).bg + '; color:' + getBankStyle(cta.banco, cta.logo_banco).text + '; border: 1px solid ' + getBankStyle(cta.banco, cta.logo_banco).border">
+                                            <span x-text="cta.banco"></span>
+                                        </span>
+                                        <span x-show="cta.rfc_empresa" class="text-[9px] font-mono text-slate-400 px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 leading-tight" x-text="cta.rfc_empresa"></span>
+                                    </div>
+                                    <h3 class="text-sm font-black text-white mt-1.5 truncate uppercase" x-text="cta.nombre"></h3>
+                                </div>
+                            </div>
+
+                            <!-- Saldo Contable y Entradas/Salidas -->
+                            <div class="mt-4 flex items-baseline justify-between">
+                                <div>
+                                    <p class="text-[11px] text-slate-400">Saldo Contable Actual</p>
+                                    <p class="text-xl font-black font-mono mt-0.5"
+                                       :class="cta.saldo_actual >= 0 ? 'text-emerald-400' : 'text-rose-400'"
+                                       x-text="formatMoney(cta.saldo_actual)"></p>
+                                </div>
+                                <div class="text-right text-[11px] text-slate-400 space-y-0.5 font-mono">
+                                    <div><span class="text-emerald-400 font-bold">+</span> <span x-text="formatMoney(cta.total_entradas)"></span></div>
+                                    <div><span class="text-rose-400 font-bold">-</span> <span x-text="formatMoney(cta.total_salidas)"></span></div>
+                                </div>
+                            </div>
+
+                            <!-- Cuenta y CLABE -->
+                            <div class="mt-3 pt-2.5 border-t border-slate-700/60 flex flex-col gap-0.5 text-[11px] text-slate-400 font-mono">
+                                <div>Cuenta: <span class="text-slate-200 font-semibold" x-text="cta.numero_cuenta"></span></div>
+                                <div>CLABE: <span class="text-slate-200 font-semibold" x-text="cta.clabe"></span></div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </section>
+
+        <!-- 1-B. BANCO ACTIVO EN PANTALLA PRINCIPAL (SOLO MUESTRA LA CUENTA SELECCIONADA) -->
+        <section x-show="!vistaReporteBancos" class="no-print">
             <div class="flex justify-between items-center mb-2.5">
                 <div class="flex items-center gap-2">
                     <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400">Cuenta Bancaria Activa</h2>
@@ -788,8 +966,8 @@
             </div>
         </section>
 
-        <!-- 2. PESTAÑAS PRINCIPALES -->
-        <section class="bg-slate-950 border border-slate-800 rounded-2xl shadow-xl overflow-hidden print-document">
+        <!-- 2. PESTAÑAS PRINCIPALES (Operación del Banco Activo) -->
+        <section x-show="!vistaReporteBancos" class="bg-slate-950 border border-slate-800 rounded-2xl shadow-xl overflow-hidden print-document">
             <div class="border-b border-slate-800 bg-slate-900/60 px-4 py-2 flex space-x-2 sm:space-x-3 overflow-x-auto no-print">
                 <button @click="activeTab = 'manual'" :class="activeTab === 'manual' ? 'tab-menu-active' : 'tab-menu-inactive text-slate-400 hover:text-slate-200'" class="py-2.5 px-3.5 sm:px-4 rounded-xl text-xs sm:text-sm flex items-center gap-1.5 whitespace-nowrap transition">
                     <span>✍️</span> <span>Captura</span>
@@ -2581,6 +2759,7 @@
                 pdfFile: null,
                 pdfCuentaId: '',
                 openMenuBancos: false,
+                vistaReporteBancos: false,
                 cuentaActivaPrincipalId: localStorage.getItem('hyma_cuenta_activa') || '',
                 empresasContraidasMenu: {},
                 openModalEntidad: false,
@@ -2946,20 +3125,38 @@
                                 empresa: empNombre,
                                 rfc: cta.rfc_empresa || '',
                                 logo_empresa: cta.logo_empresa || '',
+                                subtotal: 0,
                                 cuentas: []
                             });
                         }
                         const g = gruposMap.get(empNombre);
                         if (!g.rfc && cta.rfc_empresa) g.rfc = cta.rfc_empresa;
                         if (!g.logo_empresa && cta.logo_empresa) g.logo_empresa = cta.logo_empresa;
+                        g.subtotal += (parseFloat(cta.saldo_actual) || 0);
                         g.cuentas.push(cta);
                     }
                     return Array.from(gruposMap.values());
                 },
 
+                get granTotalDisponibleBancos() {
+                    return (this.cuentasPermitidas || []).reduce((acc, cta) => acc + (parseFloat(cta.saldo_actual) || 0), 0);
+                },
+
+                get granTotalEntradasBancos() {
+                    return (this.cuentasPermitidas || []).reduce((acc, cta) => acc + (parseFloat(cta.total_entradas) || 0), 0);
+                },
+
+                get granTotalSalidasBancos() {
+                    return (this.cuentasPermitidas || []).reduce((acc, cta) => acc + (parseFloat(cta.total_salidas) || 0), 0);
+                },
+
+                abrirReporteBancos() {
+                    this.vistaReporteBancos = true;
+                    this.openMenuBancos = false;
+                },
+
                 esEmpresaExpandida(empresa) {
-                    // Por defecto todas las empresas aparecen desplegadas para acceso rápido, o se pueden contraer con un clic
-                    return !this.empresasContraidasMenu[empresa];
+                    return Boolean(this.empresasContraidasMenu[empresa]);
                 },
 
                 toggleEmpresaMenu(empresa) {
@@ -2968,6 +3165,7 @@
 
                 async seleccionarBancoActivo(cta) {
                     if (!cta) return;
+                    this.vistaReporteBancos = false;
                     this.cuentaActivaPrincipalId = String(cta.id);
                     localStorage.setItem('hyma_cuenta_activa', String(cta.id));
                     this.openMenuBancos = false;
