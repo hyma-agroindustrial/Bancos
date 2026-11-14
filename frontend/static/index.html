@@ -280,7 +280,9 @@
         body.theme-light .bg-slate-950,
         body.theme-light .bg-slate-950\/95,
         body.theme-light .bg-slate-900,
-        body.theme-light .bg-slate-900\/90 {
+        body.theme-light .bg-slate-900\/95,
+        body.theme-light .bg-slate-900\/90,
+        body.theme-light .bg-slate-900\/80 {
             background-color: var(--bg-card) !important;
         }
         body.theme-light .bg-slate-900\/60,
@@ -288,7 +290,8 @@
         body.theme-light .bg-slate-900\/40,
         body.theme-light .bg-slate-800,
         body.theme-light .bg-slate-800\/80,
-        body.theme-light .bg-slate-800\/70 {
+        body.theme-light .bg-slate-800\/70,
+        body.theme-light .bg-slate-700 {
             background-color: var(--bg-subtle) !important;
         }
         /* Tarjetas superiores de Cuentas Bancarias con relieve y borde nítido */
@@ -434,6 +437,14 @@
         body.theme-light table thead th {
             color: var(--text-secondary) !important;
             font-weight: 700 !important;
+        }
+        body.theme-light table tfoot {
+            background-color: var(--bg-subtle) !important;
+            border-top: 2px solid var(--border-input) !important;
+        }
+        body.theme-light table tfoot td {
+            color: var(--text-main) !important;
+            font-weight: 800 !important;
         }
         body.theme-light table tbody tr:hover {
             background-color: var(--row-hover) !important;
