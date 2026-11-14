@@ -316,6 +316,32 @@
             border: 1.5px solid var(--border-color) !important;
             box-shadow: 0 6px 24px rgba(15, 23, 42, 0.06) !important;
         }
+        /* Estilo resaltado con sombra pronunciada para la pestaña activa del menú */
+        .tab-menu-active {
+            background: rgba(6, 78, 59, 0.75) !important;
+            color: #34d399 !important;
+            font-weight: 800 !important;
+            border: 1.5px solid #10b981 !important;
+            border-bottom: 3.5px solid #10b981 !important;
+            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.32), 0 2px 6px rgba(0, 0, 0, 0.25) !important;
+            transform: translateY(-1px);
+        }
+        body.theme-light .tab-menu-active {
+            background: #ecfdf5 !important;
+            color: #065f46 !important;
+            font-weight: 800 !important;
+            border: 1.5px solid #34d399 !important;
+            border-bottom: 3.5px solid #059669 !important;
+            box-shadow: 0 6px 16px rgba(5, 150, 105, 0.26), 0 2px 6px rgba(15, 23, 42, 0.10) !important;
+            transform: translateY(-1px);
+        }
+        .tab-menu-inactive {
+            border: 1.5px solid transparent !important;
+            border-bottom: 2px solid transparent !important;
+        }
+        body.theme-light .tab-menu-inactive:hover {
+            background: var(--row-hover) !important;
+        }
         /* Bordes generales más nítidos */
         body.theme-light .border-slate-800,
         body.theme-light .border-slate-800\/80,
@@ -764,20 +790,20 @@
 
         <!-- 2. PESTAÑAS PRINCIPALES -->
         <section class="bg-slate-950 border border-slate-800 rounded-2xl shadow-xl overflow-hidden print-document">
-            <div class="border-b border-slate-800 bg-slate-900/60 px-4 flex space-x-2 sm:space-x-4 overflow-x-auto no-print">
-                <button @click="activeTab = 'manual'" :class="activeTab === 'manual' ? 'border-emerald-500 text-emerald-400 font-bold' : 'border-transparent text-slate-400 hover:text-slate-200'" class="py-3 px-2 sm:px-3 border-b-2 text-xs sm:text-sm flex items-center gap-1.5 whitespace-nowrap transition">
-                    <span>✍️</span> <span>Captura Manual</span>
+            <div class="border-b border-slate-800 bg-slate-900/60 px-4 py-2 flex space-x-2 sm:space-x-3 overflow-x-auto no-print">
+                <button @click="activeTab = 'manual'" :class="activeTab === 'manual' ? 'tab-menu-active' : 'tab-menu-inactive text-slate-400 hover:text-slate-200'" class="py-2.5 px-3.5 sm:px-4 rounded-xl text-xs sm:text-sm flex items-center gap-1.5 whitespace-nowrap transition">
+                    <span>✍️</span> <span>Captura</span>
                 </button>
-                <button @click="activeTab = 'pdf'" :class="activeTab === 'pdf' ? 'border-emerald-500 text-emerald-400 font-bold' : 'border-transparent text-slate-400 hover:text-slate-200'" class="py-3 px-2 sm:px-3 border-b-2 text-xs sm:text-sm flex items-center gap-1.5 whitespace-nowrap transition">
+                <button @click="activeTab = 'pdf'" :class="activeTab === 'pdf' ? 'tab-menu-active' : 'tab-menu-inactive text-slate-400 hover:text-slate-200'" class="py-2.5 px-3.5 sm:px-4 rounded-xl text-xs sm:text-sm flex items-center gap-1.5 whitespace-nowrap transition">
                     <span>📄</span> <span>Carga Estado Cuenta (PDF)</span>
                 </button>
-                <button @click="activeTab = 'reportes'" :class="activeTab === 'reportes' ? 'border-emerald-500 text-emerald-400 font-bold' : 'border-transparent text-slate-400 hover:text-slate-200'" class="py-3 px-2 sm:px-3 border-b-2 text-xs sm:text-sm flex items-center gap-1.5 whitespace-nowrap transition">
+                <button @click="activeTab = 'reportes'" :class="activeTab === 'reportes' ? 'tab-menu-active' : 'tab-menu-inactive text-slate-400 hover:text-slate-200'" class="py-2.5 px-3.5 sm:px-4 rounded-xl text-xs sm:text-sm flex items-center gap-1.5 whitespace-nowrap transition">
                     <span>📊</span> <span>Reportes & Movimientos</span>
                 </button>
-                <button @click="activeTab = 'corte'; if(!datosEstadoCuenta) generarEstadoCuenta();" :class="activeTab === 'corte' ? 'border-emerald-500 text-emerald-400 font-bold' : 'border-transparent text-slate-400 hover:text-slate-200'" class="py-3 px-2 sm:px-3 border-b-2 text-xs sm:text-sm flex items-center gap-1.5 whitespace-nowrap transition">
+                <button @click="activeTab = 'corte'; if(!datosEstadoCuenta) generarEstadoCuenta();" :class="activeTab === 'corte' ? 'tab-menu-active' : 'tab-menu-inactive text-slate-400 hover:text-slate-200'" class="py-2.5 px-3.5 sm:px-4 rounded-xl text-xs sm:text-sm flex items-center gap-1.5 whitespace-nowrap transition">
                     <span>🏛️</span> <span>Corte de Mes (Estado de Cuenta)</span>
                 </button>
-                <button @click="activeTab = 'estados_cuenta'; cargarArchivosEstadoCuenta();" :class="activeTab === 'estados_cuenta' ? 'border-emerald-500 text-emerald-400 font-bold' : 'border-transparent text-slate-400 hover:text-slate-200'" class="py-3 px-2 sm:px-3 border-b-2 text-xs sm:text-sm flex items-center gap-1.5 whitespace-nowrap transition">
+                <button @click="activeTab = 'estados_cuenta'; cargarArchivosEstadoCuenta();" :class="activeTab === 'estados_cuenta' ? 'tab-menu-active' : 'tab-menu-inactive text-slate-400 hover:text-slate-200'" class="py-2.5 px-3.5 sm:px-4 rounded-xl text-xs sm:text-sm flex items-center gap-1.5 whitespace-nowrap transition">
                     <span>📁</span> <span>Estados de Cuenta</span>
                 </button>
             </div>
