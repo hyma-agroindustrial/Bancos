@@ -191,7 +191,8 @@ async def subir_fotografia_logo(file: UploadFile = File(...), db: Session = Depe
 # ====================================================================================================
 @app.post("/api/auth/login", response_model=AuthResponse)
 def login_usuario(payload: UsuarioLogin, db: Session = Depends(get_db)):
-    user = db.query(Usuario).filter(Usuario.username == payload.username.strip(), Usuario.activo == True).first()
+    uname = (payload.username or "").strip().lower()
+    user = db.query(Usuario).filter(func.lower(Usuario.username) == uname, Usuario.activo == True).first()
     if not user or user.pin_hash != hash_pin(payload.pin.strip()):
         raise HTTPException(status_code=401, detail="Usuario o PIN incorrecto.")
 
