@@ -279,10 +279,14 @@
         }
         body.theme-light .bg-slate-950,
         body.theme-light .bg-slate-950\/95,
+        body.theme-light .bg-slate-950\/90,
+        body.theme-light .bg-slate-950\/80,
+        body.theme-light .bg-slate-950\/70,
         body.theme-light .bg-slate-900,
         body.theme-light .bg-slate-900\/95,
         body.theme-light .bg-slate-900\/90,
-        body.theme-light .bg-slate-900\/80 {
+        body.theme-light .bg-slate-900\/80,
+        body.theme-light .bg-slate-900\/70 {
             background-color: var(--bg-card) !important;
         }
         body.theme-light .bg-slate-900\/60,
@@ -291,7 +295,10 @@
         body.theme-light .bg-slate-800,
         body.theme-light .bg-slate-800\/80,
         body.theme-light .bg-slate-800\/70,
-        body.theme-light .bg-slate-700 {
+        body.theme-light .bg-slate-700,
+        body.theme-light .hover\:bg-slate-900:hover,
+        body.theme-light .hover\:bg-slate-800:hover,
+        body.theme-light .hover\:bg-slate-700:hover {
             background-color: var(--bg-subtle) !important;
         }
         /* Tarjetas superiores de Cuentas Bancarias con relieve y borde nítido */
@@ -564,15 +571,15 @@
                         </div>
 
                         <!-- Agrupación por Empresa (HYMA AGROINDUSTRIAL, QUADAGRI, VAFAGRI...) -->
-                        <div class="space-y-2">
+                        <div class="space-y-2.5">
                             <template x-for="grupo in bancosAgrupadosPorEmpresa" :key="grupo.empresa">
-                                <div class="bg-slate-950/90 border border-slate-800 rounded-xl overflow-hidden">
+                                <div class="bg-slate-900 border border-slate-700 rounded-xl overflow-hidden shadow-sm">
                                     <!-- Encabezado de la Empresa (Click para desplegar/contraer sus cuentas) -->
                                     <button type="button"
                                             @click="toggleEmpresaMenu(grupo.empresa)"
-                                            class="w-full px-3 py-2 bg-slate-800/70 hover:bg-slate-800 flex items-center justify-between text-left transition border-b border-slate-800/80">
-                                        <div class="flex items-center gap-2 min-w-0">
-                                            <div class="w-6 h-6 rounded-md bg-slate-900 border border-slate-700 p-0.5 flex items-center justify-center shrink-0 overflow-hidden">
+                                            class="w-full px-3 py-2.5 bg-slate-800/70 hover:bg-slate-800 flex items-center justify-between text-left transition border-b border-slate-700">
+                                        <div class="flex items-center gap-2.5 min-w-0">
+                                            <div class="w-7 h-7 rounded-lg bg-slate-950 border border-slate-700 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-sm">
                                                 <template x-if="grupo.logo_empresa">
                                                     <img :src="grupo.logo_empresa" class="w-full h-full object-contain">
                                                 </template>
@@ -582,41 +589,41 @@
                                             </div>
                                             <div class="truncate">
                                                 <span class="text-xs font-black text-white uppercase tracking-wide block truncate" x-text="grupo.empresa"></span>
-                                                <span x-show="grupo.rfc" class="text-[9px] font-mono text-slate-400 block" x-text="'RFC: ' + grupo.rfc"></span>
+                                                <span x-show="grupo.rfc" class="text-[10px] font-mono text-slate-400 font-semibold block" x-text="'RFC: ' + grupo.rfc"></span>
                                             </div>
                                         </div>
                                         <div class="flex items-center gap-1.5 shrink-0">
-                                            <span class="text-[10px] font-mono text-slate-400" x-text="grupo.cuentas.length + ' cta(s)'"></span>
+                                            <span class="text-[10px] font-mono font-semibold text-slate-400" x-text="grupo.cuentas.length + ' cta(s)'"></span>
                                             <span class="text-xs text-slate-400 transition-transform duration-150" :class="esEmpresaExpandida(grupo.empresa) ? 'rotate-90' : ''">▸</span>
                                         </div>
                                     </button>
 
                                     <!-- Sublista de Cuentas Activas de esta Empresa -->
-                                    <div x-show="esEmpresaExpandida(grupo.empresa)" class="divide-y divide-slate-800/60 p-1.5 space-y-1">
+                                    <div x-show="esEmpresaExpandida(grupo.empresa)" class="p-2 space-y-1.5 bg-slate-900">
                                         <template x-for="cta in grupo.cuentas" :key="cta.id">
                                             <button type="button"
                                                     @click="seleccionarBancoActivo(cta)"
-                                                    class="w-full p-2 rounded-lg text-left transition flex items-center justify-between gap-2"
-                                                    :class="cuentaActivaPrincipal && Number(cuentaActivaPrincipal.id) === Number(cta.id) ? 'bg-emerald-950/60 border border-emerald-500/80 shadow-sm' : 'hover:bg-slate-900 border border-transparent'">
-                                                <div class="min-w-0 flex-1 pl-1">
+                                                    class="w-full p-2.5 rounded-xl text-left transition flex items-center justify-between gap-2"
+                                                    :class="cuentaActivaPrincipal && Number(cuentaActivaPrincipal.id) === Number(cta.id) ? 'bg-emerald-950/60 border-2 border-emerald-500 shadow-sm' : 'bg-slate-950 hover:bg-slate-800 border border-slate-700'">
+                                                <div class="min-w-0 flex-1 pl-0.5">
                                                     <div class="flex items-center gap-1.5 flex-wrap">
                                                         <span class="text-[10px] font-black px-2 py-0.5 rounded shadow-sm leading-tight"
                                                               :style="'background:' + getBankStyle(cta.banco, cta.logo_banco).bg + '; color:' + getBankStyle(cta.banco, cta.logo_banco).text + '; border: 1px solid ' + getBankStyle(cta.banco, cta.logo_banco).border"
                                                               x-text="cta.banco"></span>
                                                         <span x-show="cuentaActivaPrincipal && Number(cuentaActivaPrincipal.id) === Number(cta.id)"
-                                                              class="text-[9px] font-black uppercase px-1.5 py-0.2 rounded bg-emerald-600 text-white">
+                                                              class="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-emerald-600 text-white">
                                                             ACTIVO
                                                         </span>
                                                     </div>
-                                                    <div class="text-[11px] font-mono text-slate-400 mt-1 truncate">
-                                                        Cta: <span class="text-slate-200 font-semibold" x-text="cta.numero_cuenta"></span>
+                                                    <div class="text-[11px] font-mono text-slate-400 mt-1.5 truncate">
+                                                        Cta: <span class="text-white font-bold" x-text="cta.numero_cuenta"></span>
                                                     </div>
                                                 </div>
                                                 <div class="text-right shrink-0">
                                                     <div class="text-xs font-black font-mono"
                                                          :class="cta.saldo_actual >= 0 ? 'text-emerald-400' : 'text-rose-400'"
                                                          x-text="formatMoney(cta.saldo_actual)"></div>
-                                                    <div class="text-[9px] text-slate-400">Saldo Actual</div>
+                                                    <div class="text-[9px] font-medium text-slate-400">Saldo Actual</div>
                                                 </div>
                                             </button>
                                         </template>
