@@ -3,11 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <title x-text="config.nombre_sistema || 'Consolidado de Bancos'">Consolidado de Bancos</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Alpine.js CDN -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.5/dist/cdn.min.js"></script>
+
+    <!-- Protección Global contra navegación involuntaria con Backspace -->
+    <script>
+        window.addEventListener('keydown', function(e) {
+            if (e.key === 'Backspace' || e.keyCode === 8) {
+                const target = e.target;
+                const tag = target && target.tagName ? target.tagName.toUpperCase() : '';
+                const isEditable = tag === 'INPUT' || tag === 'TEXTAREA' || (target && target.isContentEditable);
+                const isReadOnly = target && (target.readOnly || target.disabled);
+                
+                // Si el foco no está en un campo de texto editable, bloquear Backspace para evitar regresar de pantalla
+                if (!isEditable || isReadOnly) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return false;
+                }
+            }
+        }, true);
+    </script>
     <script>
         tailwind.config = {
             theme: {
@@ -867,7 +889,7 @@
 
     <!-- MODAL: PERSONALIZAR MARCA Y ENCABEZADO -->
     <div x-show="openModalConfiguracion" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" x-cloak>
-        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4" @click.away="openModalConfiguracion = false">
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <div class="flex justify-between items-center">
                 <h3 class="text-base font-bold text-white">⚙️ Personalizar Encabezado & Marca</h3>
                 <button @click="openModalConfiguracion = false" class="text-slate-400 hover:text-white text-sm">✕</button>
@@ -937,7 +959,7 @@
 
     <!-- MODAL: AGREGAR CATEGORÍA AL VUELO -->
     <div x-show="openModalCategoria" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" x-cloak>
-        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4" @click.away="openModalCategoria = false">
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4">
             <h3 class="text-base font-bold text-white">➕ Nueva Categoría Fiscal</h3>
             <p class="text-xs text-slate-400">Agrega una categoría (Papelería, Herramientas, Comida, etc.) para clasificar gastos o ingresos.</p>
 
@@ -983,8 +1005,7 @@
                  'max-w-lg': tamanioModal === 'pequeno',
                  'max-w-2xl': tamanioModal === 'normal',
                  'max-w-4xl': tamanioModal === 'grande'
-             }"
-             @click.away="openModalCuenta = false">
+             }">
             
             <!-- ENCABEZADO CON SELECTOR DE TAMAÑO (PEQUEÑO / NORMAL / GRANDE) -->
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3.5 border-b border-slate-800 mb-4">
@@ -1148,7 +1169,7 @@
 
     <!-- MODAL: GESTIÓN DE USUARIOS Y PIN -->
     <div x-show="openModalUsuarios" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" x-cloak>
-        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4" @click.away="openModalUsuarios = false">
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4">
             <div class="flex justify-between items-center">
                 <h3 class="text-base font-bold text-white">👥 Control de Usuarios y PIN</h3>
                 <button @click="openModalUsuarios = false" class="text-slate-400 hover:text-white text-sm">✕</button>
@@ -1207,7 +1228,7 @@
 
     <!-- MODAL: AGREGAR ENTIDAD AL VUELO -->
     <div x-show="openModalEntidad" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" x-cloak>
-        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-sm w-full p-6 shadow-2xl" @click.away="openModalEntidad = false">
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-sm w-full p-6 shadow-2xl">
             <h3 class="text-base font-bold text-white mb-1" x-text="'➕ Agregar Nuevo ' + labelModalEntidad"></h3>
             <p class="text-xs text-slate-400 mb-4">Se guardará automáticamente para autocompletar.</p>
 
@@ -1242,8 +1263,7 @@
                  'max-w-lg': tamanioModal === 'pequeno',
                  'max-w-2xl': tamanioModal === 'normal',
                  'max-w-4xl': tamanioModal === 'grande'
-             }"
-             @click.away="openModalEditarTransaccion = false">
+             }">
             
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-2.5 border-b border-slate-800">
                 <div>
@@ -1334,7 +1354,7 @@
 
     <!-- MODAL: EDITAR / CORREGIR CATEGORÍA -->
     <div x-show="openModalEditarCategoria" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" x-cloak>
-        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4" @click.away="openModalEditarCategoria = false">
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4">
             <div class="flex justify-between items-center">
                 <h3 class="text-base font-bold text-white">✏️ Corregir Categoría Fiscal</h3>
                 <button @click="openModalEditarCategoria = false" class="text-slate-400 hover:text-white text-sm">✕</button>
@@ -1383,7 +1403,7 @@
 
     <!-- MODAL: EDITAR / CORREGIR ENTIDAD (CLIENTE / PROVEEDOR) -->
     <div x-show="openModalEditarEntidad" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" x-cloak>
-        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4" @click.away="openModalEditarEntidad = false">
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4">
             <div class="flex justify-between items-center">
                 <h3 class="text-base font-bold text-white">✏️ Corregir Cliente / Proveedor</h3>
                 <button @click="openModalEditarEntidad = false" class="text-slate-400 hover:text-white text-sm">✕</button>
@@ -1427,7 +1447,7 @@
 
     <!-- MODAL: GESTIÓN COMPLETA DE CATÁLOGOS -->
     <div x-show="openModalCatalogos" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" x-cloak>
-        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-4" @click.away="openModalCatalogos = false">
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-4">
             <div class="flex justify-between items-center">
                 <div class="flex items-center space-x-2">
                     <span class="text-lg">🏷️</span>

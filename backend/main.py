@@ -886,4 +886,8 @@ if os.path.exists(frontend_dir):
 
     @app.get("/")
     def index():
-        return FileResponse(os.path.join(frontend_dir, "index.html"))
+        response = FileResponse(os.path.join(frontend_dir, "index.html"))
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
