@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import hashlib
 import secrets
@@ -10,18 +11,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, text
 from typing import List, Optional, Dict
-from datetime import date
-from decimal import Decimal
 
 from .database import engine, Base, get_db
-from .models import Cuenta, Categoria, Entidad, Transaccion, Usuario, Configuracion, EstadoCuentaArchivo
+from .models import (
+    Cuenta, Categoria, Entidad, Transaccion, Usuario, Configuracion,
+    EstadoCuentaArchivo, ReglaClasificacion, CierreMes
+)
 from .schemas import (
     CuentaCreate, CuentaUpdate, CuentaResponse,
     CategoriaCreate, CategoriaUpdate, CategoriaResponse,
     EntidadCreate, EntidadUpdate, EntidadResponse,
     TransaccionCreate, TransaccionUpdate, TransaccionResponse,
+    BulkTransaccionUpdate, ConciliacionCierrePayload,
     MovimientoExtraido, BatchImportConfirm,
     UsuarioLogin, UsuarioCreate, UsuarioUpdate, UsuarioResponse, AuthResponse,
     ConfiguracionData, EstadoCuentaArchivoResponse
@@ -53,6 +56,18 @@ def hash_pin(pin: str) -> str:
 def startup_seed_data():
     db = next(get_db())
     try:
+        # 0. Migración segura de columnas nuevas en SQLite
+        for col_sql in [
+            "ALTER TABLE transacciones ADD COLUMN estatus_factura VARCHAR(20) DEFAULT 'PENDIENTE'",
+            "ALTER TABLE transacciones ADD COLUMN usuario_registro VARCHAR(80)",
+            "ALTER TABLE transacciones ADD COLUMN traspaso_vinculado_id INTEGER"
+        ]:
+            try:
+                db.execute(text(col_sql))
+                db.commit()
+            except Exception:
+                db.rollback()
+
         # 1. Seed Configuración del Encabezado (Nombre, Descripción, Logo)
         cfg_defaults = {
             "nombre_sistema": "Consolidado de Bancos",
@@ -525,14 +540,88 @@ def eliminar_entidad(entidad_id: int, db: Session = Depends(get_db)):
 
 
 # ====================================================================================================
-# 3. CAPTURA Y GESTIÓN DE TRANSACCIONES
+# 3. CAPTURA Y GESTIÓN DE TRANSACCIONES (CON AUTO-APRENDIZAJE, TRASPASO ESPEJO Y CANDADO DE MES)
 # ====================================================================================================
+NOMBRE_MESES_CORTO = {
+    1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril",
+    5: "Mayo", 6: "Junio", 7: "Julio", 8: "Agosto",
+    9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
+}
+
+def verificar_mes_cerrado(db: Session, cuenta_id: int, f_date: date):
+    cierre = db.query(CierreMes).filter(
+        CierreMes.cuenta_id == cuenta_id,
+        CierreMes.anio == f_date.year,
+        CierreMes.mes == f_date.month,
+        CierreMes.cerrado == True
+    ).first()
+    if cierre:
+        mes_nom = NOMBRE_MESES_CORTO.get(f_date.month, str(f_date.month))
+        raise HTTPException(
+            status_code=400,
+            detail=f"🔒 El periodo {mes_nom} {f_date.year} de esta cuenta está CERRADO y CONCILIADO. Desbloquéalo en 'Corte de Mes' si necesitas hacer ajustes."
+        )
+
+def extraer_patron_aprendizaje(concepto: str) -> Optional[str]:
+    if not concepto:
+        return None
+    c_up = concepto.strip().upper()
+    # 1. Si el concepto incluye un RFC explícito, usar ese RFC como llave de alta precisión
+    rfc_match = re.search(r"\b([A-Z&Ñ]{3,4}\s?\d{6}[A-Z0-9]{3})\b", c_up)
+    if rfc_match:
+        return rfc_match.group(1).replace(" ", "")
+    # 2. Limpiar folios largos, horas y referencias numéricas variables
+    limpio = re.sub(r"\b\d{4,}\b", "", c_up)
+    limpio = re.sub(r"\d{2}:\d{2}(:\d{2})?", "", limpio)
+    limpio = re.sub(r"[^A-ZÁÉÍÓÚÑ\s]", " ", limpio)
+    limpio = re.sub(r"\s+", " ", limpio).strip()
+    if len(limpio) >= 5:
+        return limpio[:65]
+    return None
+
+def aprender_regla_clasificacion(
+    db: Session,
+    concepto: str,
+    categoria_id: Optional[int],
+    entidad_id: Optional[int]
+):
+    if not categoria_id and not entidad_id:
+        return
+    patron = extraer_patron_aprendizaje(concepto)
+    if not patron or len(patron) < 4:
+        return
+    # Evitar guardar patrones genéricos de traspaso que cambian de destino
+    if patron in ("SPEI", "TRANSFERENCIA", "ABONO", "CARGO"):
+        return
+    regla = db.query(ReglaClasificacion).filter(ReglaClasificacion.patron == patron).first()
+    if regla:
+        if categoria_id is not None:
+            regla.categoria_id = categoria_id
+        if entidad_id is not None:
+            regla.entidad_id = entidad_id
+    else:
+        db.add(ReglaClasificacion(
+            patron=patron,
+            categoria_id=categoria_id,
+            entidad_id=entidad_id
+        ))
+
+def inferir_estatus_factura_default(concepto: str, categoria_nombre: Optional[str] = None) -> str:
+    c_up = (concepto or "").upper()
+    cat_up = (categoria_nombre or "").upper()
+    if any(w in c_up for w in ["COMISION", "IVA - COMISIONES", "TRASPASO", "MEMBRESIA", "IMPUESTO", "SAT", "NOMINA"]) or any(
+        w in cat_up for w in ["COMISION", "TRASPASO", "IMPUESTO", "NOMINA"]
+    ):
+        return "NO_APLICA"
+    return "PENDIENTE"
+
 @app.get("/api/transacciones", response_model=List[TransaccionResponse])
 def listar_transacciones(
     cuenta_id: Optional[int] = None,
     categoria_id: Optional[int] = None,
     entidad_id: Optional[int] = None,
     tipo: Optional[str] = None,
+    estatus_factura: Optional[str] = None,
     fecha_inicio: Optional[date] = None,
     fecha_fin: Optional[date] = None,
     limit: int = 2000,
@@ -548,6 +637,8 @@ def listar_transacciones(
         query = query.filter(Transaccion.entidad_id == entidad_id)
     if tipo:
         query = query.filter(Transaccion.tipo == tipo)
+    if estatus_factura:
+        query = query.filter(Transaccion.estatus_factura == estatus_factura)
     if fecha_inicio:
         query = query.filter(Transaccion.fecha >= fecha_inicio)
     if fecha_fin:
@@ -563,6 +654,8 @@ def listar_transacciones(
         tr_dict.cuenta_numero = t.cuenta.numero_cuenta if t.cuenta else None
         tr_dict.categoria_nombre = t.categoria.nombre if t.categoria else None
         tr_dict.entidad_nombre = t.entidad.nombre if t.entidad else None
+        if not tr_dict.estatus_factura:
+            tr_dict.estatus_factura = "PENDIENTE"
         resultado.append(tr_dict)
         
     return resultado
@@ -573,8 +666,48 @@ def crear_transaccion_manual(trans: TransaccionCreate, db: Session = Depends(get
     if not cuenta:
         raise HTTPException(status_code=404, detail="Cuenta bancaria no encontrada.")
 
-    nueva = Transaccion(**trans.model_dump())
+    verificar_mes_cerrado(db, trans.cuenta_id, trans.fecha)
+
+    datos_insert = trans.model_dump(exclude={"cuenta_destino_id"})
+    if not datos_insert.get("estatus_factura"):
+        cat_obj = db.query(Categoria).filter(Categoria.id == trans.categoria_id).first() if trans.categoria_id else None
+        datos_insert["estatus_factura"] = inferir_estatus_factura_default(
+            trans.concepto, cat_obj.nombre if cat_obj else None
+        )
+
+    nueva = Transaccion(**datos_insert)
     db.add(nueva)
+    db.flush()
+
+    # Si es un Traspaso Entre Cuentas con Cuenta Destino seleccionada, crear el Movimiento Espejo Automático
+    if trans.cuenta_destino_id and int(trans.cuenta_destino_id) != int(trans.cuenta_id):
+        cuenta_dest = db.query(Cuenta).filter(Cuenta.id == trans.cuenta_destino_id).first()
+        if not cuenta_dest:
+            raise HTTPException(status_code=404, detail="La cuenta bancaria destino del traspaso no existe.")
+        verificar_mes_cerrado(db, cuenta_dest.id, trans.fecha)
+
+        tipo_espejo = "ENTRADA" if trans.tipo == "SALIDA" else "SALIDA"
+        concepto_espejo = f"TRASPASO {'DE' if tipo_espejo == 'ENTRADA' else 'A'} {cuenta.banco} ({cuenta.nombre} *{cuenta.numero_cuenta[-4:]}) · {trans.concepto}"
+        espejo = Transaccion(
+            cuenta_id=cuenta_dest.id,
+            categoria_id=trans.categoria_id,
+            entidad_id=trans.entidad_id,
+            fecha=trans.fecha,
+            tipo=tipo_espejo,
+            monto=trans.monto,
+            concepto=concepto_espejo[:250],
+            referencia=trans.referencia,
+            origen="MANUAL",
+            estatus_factura="NO_APLICA",
+            usuario_registro=trans.usuario_registro,
+            traspaso_vinculado_id=nueva.id
+        )
+        db.add(espejo)
+        db.flush()
+        nueva.traspaso_vinculado_id = espejo.id
+        nueva.estatus_factura = "NO_APLICA"
+
+    aprender_regla_clasificacion(db, nueva.concepto, nueva.categoria_id, nueva.entidad_id)
     db.commit()
     db.refresh(nueva)
 
@@ -588,10 +721,12 @@ def crear_transaccion_manual(trans: TransaccionCreate, db: Session = Depends(get
 
 @app.put("/api/transacciones/{transaccion_id}", response_model=TransaccionResponse)
 def modificar_transaccion(transaccion_id: int, datos: TransaccionUpdate, db: Session = Depends(get_db)):
-    """Permite modificar fecha, monto, concepto, categoría, cuenta o beneficiario de un movimiento existente."""
+    """Permite modificar fecha, monto, concepto, categoría, cuenta, estatus CFDI o beneficiario de un movimiento existente."""
     t = db.query(Transaccion).filter(Transaccion.id == transaccion_id).first()
     if not t:
         raise HTTPException(status_code=404, detail="Movimiento no encontrado.")
+
+    verificar_mes_cerrado(db, t.cuenta_id, t.fecha)
 
     if datos.cuenta_id is not None:
         cta = db.query(Cuenta).filter(Cuenta.id == datos.cuenta_id).first()
@@ -611,6 +746,7 @@ def modificar_transaccion(transaccion_id: int, datos: TransaccionUpdate, db: Ses
         t.entidad_id = None
 
     if datos.fecha is not None:
+        verificar_mes_cerrado(db, t.cuenta_id, datos.fecha)
         t.fecha = datos.fecha
     if datos.tipo is not None:
         t.tipo = datos.tipo
@@ -620,7 +756,12 @@ def modificar_transaccion(transaccion_id: int, datos: TransaccionUpdate, db: Ses
         t.concepto = datos.concepto.strip()
     if datos.referencia is not None:
         t.referencia = datos.referencia.strip()
+    if datos.estatus_factura is not None:
+        t.estatus_factura = datos.estatus_factura
+    if datos.usuario_registro is not None:
+        t.usuario_registro = datos.usuario_registro
 
+    aprender_regla_clasificacion(db, t.concepto, t.categoria_id, t.entidad_id)
     db.commit()
     db.refresh(t)
 
@@ -632,20 +773,57 @@ def modificar_transaccion(transaccion_id: int, datos: TransaccionUpdate, db: Ses
     tr_dict.entidad_nombre = t.entidad.nombre if t.entidad else None
     return tr_dict
 
+@app.patch("/api/transacciones/{transaccion_id}/factura")
+def cambiar_estatus_factura(transaccion_id: int, estatus_factura: str = Query(...), db: Session = Depends(get_db)):
+    t = db.query(Transaccion).filter(Transaccion.id == transaccion_id).first()
+    if not t:
+        raise HTTPException(status_code=404, detail="Movimiento no encontrado.")
+    if estatus_factura not in ("FACTURADO", "PENDIENTE", "NO_APLICA"):
+        raise HTTPException(status_code=400, detail="Estatus de factura inválido.")
+    t.estatus_factura = estatus_factura
+    db.commit()
+    return {"id": t.id, "estatus_factura": t.estatus_factura}
+
+@app.post("/api/transacciones/bulk-update")
+def edicion_masiva_transacciones(payload: BulkTransaccionUpdate, db: Session = Depends(get_db)):
+    if not payload.ids:
+        raise HTTPException(status_code=400, detail="Selecciona al menos un movimiento.")
+    registros = db.query(Transaccion).filter(Transaccion.id.in_(payload.ids)).all()
+    actualizados = 0
+    for t in registros:
+        verificar_mes_cerrado(db, t.cuenta_id, t.fecha)
+        if payload.categoria_id is not None:
+            t.categoria_id = payload.categoria_id
+        if payload.entidad_id is not None:
+            t.entidad_id = payload.entidad_id
+        if payload.estatus_factura is not None and payload.estatus_factura != "":
+            t.estatus_factura = payload.estatus_factura
+        if payload.usuario_registro:
+            t.usuario_registro = payload.usuario_registro
+        aprender_regla_clasificacion(db, t.concepto, t.categoria_id, t.entidad_id)
+        actualizados += 1
+    db.commit()
+    return {"message": f"✅ Se actualizaron {actualizados} movimientos correctamente.", "actualizados": actualizados}
+
 @app.delete("/api/transacciones/{transaccion_id}")
 def eliminar_transaccion(transaccion_id: int, db: Session = Depends(get_db)):
     """Elimina permanentemente una transacción de la base de datos."""
     t = db.query(Transaccion).filter(Transaccion.id == transaccion_id).first()
     if not t:
         raise HTTPException(status_code=404, detail="Movimiento no encontrado.")
+    verificar_mes_cerrado(db, t.cuenta_id, t.fecha)
     db.delete(t)
     db.commit()
     return {"message": "Movimiento eliminado exitosamente."}
 
 
 # ====================================================================================================
-# 4. EXTRACCIÓN AUTOMATIZADA DE PDF BANCARIO (ESTADOS DE CUENTA)
+# 4. EXTRACCIÓN AUTOMATIZADA DE PDF BANCARIO (ESTADOS DE CUENTA CON AUTO-APRENDIZAJE Y ARCHIVADO)
 # ====================================================================================================
+STORAGE_EDOS_DIR = os.path.join(os.path.dirname(__file__), "storage", "estados_cuenta")
+os.makedirs(STORAGE_EDOS_DIR, exist_ok=True)
+PENDING_PDF_UPLOADS: Dict[str, bytes] = {}
+
 @app.post("/api/transacciones/upload-pdf", response_model=List[MovimientoExtraido])
 async def extraer_movimientos_pdf(
     cuenta_id: int = Form(...),
@@ -663,6 +841,9 @@ async def extraer_movimientos_pdf(
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="El archivo PDF está vacío.")
 
+    # Guardar temporalmente los bytes del PDF para archivarlo automáticamente en "Estados de Cuenta" al confirmar importación
+    PENDING_PDF_UPLOADS[f"{cuenta_id}:{file.filename}"] = content
+
     existing_hashes = set(
         h[0] for h in db.query(Transaccion.hash_deduplicacion).filter(
             Transaccion.cuenta_id == cuenta_id, Transaccion.hash_deduplicacion != None
@@ -673,6 +854,8 @@ async def extraer_movimientos_pdf(
 
     cats = db.query(Categoria).filter(Categoria.activo == True).all()
     entidades_db = db.query(Entidad).filter(Entidad.activo == True).all()
+    reglas_aprendidas = db.query(ReglaClasificacion).all()
+
     gas_cat = next((c.id for c in cats if "GASOLINA" in c.nombre.upper() or "DIESEL" in c.nombre.upper()), None)
     cli_cat = next((c.id for c in cats if "CLIENTE" in c.nombre.upper()), None)
     sat_cat = next((c.id for c in cats if "IMPUESTO" in c.nombre.upper() or "SAT" in c.nombre.upper()), None)
@@ -686,33 +869,52 @@ async def extraer_movimientos_pdf(
 
     for m in movimientos:
         conc = m["concepto"].upper()
-        if any(w in conc for w in ["GM FINANCIAL", "CHEYENNE", "AUTOMOTRIZ", "ARRENDAMIENTO FINANCIERO"]):
-            m["categoria_id_sugerida"] = cred_cat
-        elif any(w in conc for w in ["HONORARIOS", "CONTABLES", "VALENZUELA EDEZA", "EDEZA"]):
-            m["categoria_id_sugerida"] = hon_cat
-        elif any(w in conc for w in ["GASOL", "COMBUSTIBLE", "HIDROCARB", "OXXO GAS", "PEMEX"]):
-            m["categoria_id_sugerida"] = gas_cat
-        elif any(w in conc for w in ["CFE", "COMISION FEDERAL", "LUZ"]):
-            m["categoria_id_sugerida"] = cfe_cat
-        elif any(w in conc for w in ["TELCEL", "TELMEX", "TOTALPLAY", "AT&T", "INTERNET"]):
-            m["categoria_id_sugerida"] = tel_cat
-        elif any(w in conc for w in ["COMISION", "MEMBRESIA", "ORDEN DE PAGO SPEI", "TRANSFERENCIA - ENVIO", "ANUALIDAD", "DISPERSION DE FONDOS"]):
-            m["categoria_id_sugerida"] = com_cat
-        elif any(w in conc for w in ["SAT", "IMPUESTO", "TESORERIA", "IMSS"]):
-            m["categoria_id_sugerida"] = sat_cat
-        elif any(w in conc for w in ["TRASPASO", "SWEB TRASPASO"]):
-            m["categoria_id_sugerida"] = trasp_cat
-        elif any(w in conc for w in ["TOYOTA", "CAM TOYOTA", "REFACCION"]):
-            m["categoria_id_sugerida"] = refac_cat
-        elif m["tipo"] == "ENTRADA":
-            m["categoria_id_sugerida"] = cli_cat
+        m["regla_aprendida"] = False
 
-        # Sugerir entidad si el nombre aparece en el concepto
-        for ent in entidades_db:
-            ent_nom = (ent.nombre or "").strip().upper()
-            if len(ent_nom) >= 4 and ent_nom in conc:
-                m["entidad_id_sugerida"] = ent.id
+        # 1. Aplicar primero Memoria Inteligente (Reglas Aprendidas por RFC o patrón previo)
+        patron_mov = extraer_patron_aprendizaje(conc)
+        for regla in reglas_aprendidas:
+            if (patron_mov and regla.patron == patron_mov) or (len(regla.patron) >= 5 and regla.patron in conc):
+                if regla.categoria_id:
+                    m["categoria_id_sugerida"] = regla.categoria_id
+                if regla.entidad_id:
+                    m["entidad_id_sugerida"] = regla.entidad_id
+                m["regla_aprendida"] = True
                 break
+
+        # 2. Si no hubo regla aprendida para categoría, usar heurística base
+        if not m.get("categoria_id_sugerida"):
+            if any(w in conc for w in ["GM FINANCIAL", "CHEYENNE", "AUTOMOTRIZ", "ARRENDAMIENTO FINANCIERO"]):
+                m["categoria_id_sugerida"] = cred_cat
+            elif any(w in conc for w in ["HONORARIOS", "CONTABLES", "VALENZUELA EDEZA", "EDEZA"]):
+                m["categoria_id_sugerida"] = hon_cat
+            elif any(w in conc for w in ["GASOL", "COMBUSTIBLE", "HIDROCARB", "OXXO GAS", "PEMEX"]):
+                m["categoria_id_sugerida"] = gas_cat
+            elif any(w in conc for w in ["CFE", "COMISION FEDERAL", "LUZ"]):
+                m["categoria_id_sugerida"] = cfe_cat
+            elif any(w in conc for w in ["TELCEL", "TELMEX", "TOTALPLAY", "AT&T", "INTERNET"]):
+                m["categoria_id_sugerida"] = tel_cat
+            elif any(w in conc for w in ["COMISION", "MEMBRESIA", "ORDEN DE PAGO SPEI", "TRANSFERENCIA - ENVIO", "ANUALIDAD", "DISPERSION DE FONDOS"]):
+                m["categoria_id_sugerida"] = com_cat
+            elif any(w in conc for w in ["SAT", "IMPUESTO", "TESORERIA", "IMSS"]):
+                m["categoria_id_sugerida"] = sat_cat
+            elif any(w in conc for w in ["TRASPASO", "SWEB TRASPASO"]):
+                m["categoria_id_sugerida"] = trasp_cat
+            elif any(w in conc for w in ["TOYOTA", "CAM TOYOTA", "REFACCION"]):
+                m["categoria_id_sugerida"] = refac_cat
+            elif m["tipo"] == "ENTRADA":
+                m["categoria_id_sugerida"] = cli_cat
+
+        # 3. Sugerir entidad por RFC o nombre si aún no se asignó
+        if not m.get("entidad_id_sugerida"):
+            for ent in entidades_db:
+                ent_rfc = (ent.rfc or "").strip().upper()
+                ent_nom = (ent.nombre or "").strip().upper()
+                if (len(ent_rfc) >= 10 and ent_rfc in conc.replace(" ", "")) or (len(ent_nom) >= 4 and ent_nom in conc):
+                    m["entidad_id_sugerida"] = ent.id
+                    break
+
+        m["estatus_factura"] = inferir_estatus_factura_default(conc)
 
     return movimientos
 
@@ -733,6 +935,8 @@ def confirmar_importacion_lote(payload: BatchImportConfirm, db: Session = Depend
         if m.es_duplicado:
             ignorados += 1
             continue
+
+        verificar_mes_cerrado(db, payload.cuenta_id, m.fecha)
 
         base_hash = m.hash_deduplicacion
         count = occurrence_counts.get(base_hash, 0) + 1
@@ -762,6 +966,8 @@ def confirmar_importacion_lote(payload: BatchImportConfirm, db: Session = Depend
 
         hashes_lote.add(final_hash)
 
+        est_factura = m.estatus_factura or inferir_estatus_factura_default(m.concepto)
+
         nueva_trans = Transaccion(
             cuenta_id=payload.cuenta_id,
             categoria_id=m.categoria_id_sugerida,
@@ -773,13 +979,48 @@ def confirmar_importacion_lote(payload: BatchImportConfirm, db: Session = Depend
             referencia=m.referencia,
             origen="PDF_EXTRACT",
             archivo_fuente=payload.archivo_nombre,
-            hash_deduplicacion=final_hash
+            hash_deduplicacion=final_hash,
+            estatus_factura=est_factura,
+            usuario_registro=payload.usuario_registro
         )
         db.add(nueva_trans)
+        aprender_regla_clasificacion(db, m.concepto, m.categoria_id_sugerida, m.entidad_id_sugerida)
         insertados += 1
 
+    # Archivar automáticamente el PDF en el expediente de Estados de Cuenta si está habilitado
+    archivado_msg = ""
+    key_pdf = f"{payload.cuenta_id}:{payload.archivo_nombre}"
+    pdf_bytes = PENDING_PDF_UPLOADS.pop(key_pdf, None)
+    if payload.archivar_pdf and pdf_bytes and payload.movimientos:
+        primera_fecha = payload.movimientos[0].fecha
+        anio_edo = primera_fecha.year
+        mes_edo = primera_fecha.month
+        ya_archivado = db.query(EstadoCuentaArchivo).filter(
+            EstadoCuentaArchivo.cuenta_id == payload.cuenta_id,
+            EstadoCuentaArchivo.anio == anio_edo,
+            EstadoCuentaArchivo.mes == mes_edo,
+            EstadoCuentaArchivo.nombre_archivo_original == payload.archivo_nombre
+        ).first()
+        if not ya_archivado:
+            clean_filename = f"edo_{payload.cuenta_id}_{anio_edo}_{int(mes_edo):02d}_{secrets.token_hex(4)}.pdf"
+            file_path = os.path.join(STORAGE_EDOS_DIR, clean_filename)
+            with open(file_path, "wb") as f:
+                f.write(pdf_bytes)
+            nuevo_archivo = EstadoCuentaArchivo(
+                cuenta_id=payload.cuenta_id,
+                anio=anio_edo,
+                mes=mes_edo,
+                nombre_archivo_original=payload.archivo_nombre,
+                nombre_archivo_almacenado=clean_filename,
+                ruta_archivo=file_path,
+                tamano_bytes=len(pdf_bytes),
+                notas=f"Archivado automáticamente al importar {insertados} movimiento(s)."
+            )
+            db.add(nuevo_archivo)
+            archivado_msg = f" El PDF fue archivado automáticamente en Estados de Cuenta ({NOMBRE_MESES_CORTO.get(mes_edo, mes_edo)} {anio_edo})."
+
     db.commit()
-    return {"message": f"Proceso completado. {insertados} movimientos importados, {ignorados} omitidos por duplicidad."}
+    return {"message": f"✅ Proceso completado: {insertados} movimientos importados, {ignorados} omitidos por duplicidad.{archivado_msg}"}
 
 
 # ====================================================================================================
@@ -923,6 +1164,12 @@ def generar_estado_cuenta_mensual(
     # Ordenar desglose de categorías por mayor monto
     desglose_categorias = sorted(list(desglose_cat_dict.values()), key=lambda x: x["total"], reverse=True)
 
+    cierre_obj = db.query(CierreMes).filter(
+        CierreMes.cuenta_id == cuenta_id,
+        CierreMes.anio == anio,
+        CierreMes.mes == mes
+    ).first()
+
     return {
         "cuenta": {
             "id": cuenta.id,
@@ -952,9 +1199,60 @@ def generar_estado_cuenta_mensual(
             "saldo_final": saldo_final_periodo,
             "total_movimientos": len(transacciones_mes)
         },
+        "cierre_mes": {
+            "cerrado": bool(cierre_obj.cerrado) if cierre_obj else False,
+            "saldo_banco_pdf": cierre_obj.saldo_banco_pdf if cierre_obj else None,
+            "cerrado_por": cierre_obj.cerrado_por if cierre_obj else None
+        },
         "movimientos": movimientos_formateados,
         "desglose_categorias": desglose_categorias
     }
+
+@app.post("/api/reportes/corte-mes/conciliacion")
+def guardar_conciliacion_cierre_mes(payload: ConciliacionCierrePayload, db: Session = Depends(get_db)):
+    cierre = db.query(CierreMes).filter(
+        CierreMes.cuenta_id == payload.cuenta_id,
+        CierreMes.anio == payload.anio,
+        CierreMes.mes == payload.mes
+    ).first()
+    if not cierre:
+        cierre = CierreMes(
+            cuenta_id=payload.cuenta_id,
+            anio=payload.anio,
+            mes=payload.mes,
+            saldo_banco_pdf=payload.saldo_banco_pdf,
+            cerrado=bool(payload.cerrado) if payload.cerrado is not None else False,
+            cerrado_por=payload.usuario
+        )
+        db.add(cierre)
+    else:
+        if "saldo_banco_pdf" in payload.model_fields_set:
+            cierre.saldo_banco_pdf = payload.saldo_banco_pdf
+        if payload.cerrado is not None:
+            cierre.cerrado = payload.cerrado
+            cierre.cerrado_por = payload.usuario
+    db.commit()
+    db.refresh(cierre)
+    return {
+        "cerrado": bool(cierre.cerrado),
+        "saldo_banco_pdf": cierre.saldo_banco_pdf,
+        "cerrado_por": cierre.cerrado_por,
+        "message": "🔒 Periodo cerrado y conciliado." if cierre.cerrado else "✅ Datos de conciliación actualizados."
+    }
+
+@app.get("/api/backup/download")
+def descargar_respaldo_bd():
+    db_path = os.path.join(os.path.dirname(__file__), "..", "bancos.db")
+    if not os.path.exists(db_path):
+        db_path = os.path.join(os.path.dirname(__file__), "bancos.db")
+    if not os.path.exists(db_path):
+        raise HTTPException(status_code=404, detail="Archivo de base de datos no localizado.")
+    hoy_str = date.today().isoformat()
+    return FileResponse(
+        path=db_path,
+        filename=f"Respaldo_Control_Bancos_{hoy_str}.db",
+        media_type="application/octet-stream"
+    )
 
 # ====================================================================================================
 # ARCHIVOS DE ESTADOS DE CUENTA (PDFS OFICIALES POR CUENTA, AÑO Y MES)

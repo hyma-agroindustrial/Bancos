@@ -211,6 +211,8 @@ class TransaccionBase(BaseModel):
     monto: Decimal = Field(..., gt=0)
     concepto: str
     referencia: Optional[str] = None
+    estatus_factura: Optional[str] = "PENDIENTE"
+    usuario_registro: Optional[str] = None
 
     @field_validator("categoria_id", "entidad_id", mode="before")
     @classmethod
@@ -226,6 +228,17 @@ class TransaccionCreate(TransaccionBase):
     origen: Optional[str] = "MANUAL"
     archivo_fuente: Optional[str] = None
     hash_deduplicacion: Optional[str] = None
+    cuenta_destino_id: Optional[int] = None
+
+    @field_validator("cuenta_destino_id", mode="before")
+    @classmethod
+    def parse_optional_dest_id(cls, v: Any) -> Optional[int]:
+        if v == "" or v is None or v == "null":
+            return None
+        try:
+            return int(v)
+        except (ValueError, TypeError):
+            return None
 
 class TransaccionUpdate(BaseModel):
     cuenta_id: Optional[int] = None
@@ -236,6 +249,8 @@ class TransaccionUpdate(BaseModel):
     monto: Optional[Decimal] = Field(None, gt=0)
     concepto: Optional[str] = None
     referencia: Optional[str] = None
+    estatus_factura: Optional[str] = None
+    usuario_registro: Optional[str] = None
 
     @field_validator("categoria_id", "entidad_id", "cuenta_id", mode="before")
     @classmethod
@@ -256,10 +271,36 @@ class TransaccionResponse(TransaccionBase):
     cuenta_numero: Optional[str] = None
     categoria_nombre: Optional[str] = None
     entidad_nombre: Optional[str] = None
+    traspaso_vinculado_id: Optional[int] = None
     created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+
+class BulkTransaccionUpdate(BaseModel):
+    ids: List[int]
+    categoria_id: Optional[int] = None
+    entidad_id: Optional[int] = None
+    estatus_factura: Optional[str] = None
+    usuario_registro: Optional[str] = None
+
+    @field_validator("categoria_id", "entidad_id", mode="before")
+    @classmethod
+    def parse_optional_bulk_id(cls, v: Any) -> Optional[int]:
+        if v == "" or v is None or v == "null":
+            return None
+        try:
+            return int(v)
+        except (ValueError, TypeError):
+            return None
+
+class ConciliacionCierrePayload(BaseModel):
+    cuenta_id: int
+    anio: int
+    mes: int
+    saldo_banco_pdf: Optional[Decimal] = None
+    cerrado: Optional[bool] = None
+    usuario: Optional[str] = None
 
 # --- PDF PREVIEW / BATCH ---
 class MovimientoExtraido(BaseModel):
@@ -275,6 +316,8 @@ class MovimientoExtraido(BaseModel):
     es_duplicado: bool = False
     categoria_id_sugerida: Optional[int] = None
     entidad_id_sugerida: Optional[int] = None
+    estatus_factura: Optional[str] = "PENDIENTE"
+    regla_aprendida: bool = False
 
     @field_validator("categoria_id_sugerida", "entidad_id_sugerida", mode="before")
     @classmethod
@@ -289,4 +332,6 @@ class MovimientoExtraido(BaseModel):
 class BatchImportConfirm(BaseModel):
     cuenta_id: int
     archivo_nombre: str
+    archivar_pdf: Optional[bool] = True
+    usuario_registro: Optional[str] = None
     movimientos: List[MovimientoExtraido]

@@ -86,11 +86,39 @@ class Transaccion(Base):
     origen = Column(String(15), default="MANUAL", nullable=False) # 'MANUAL' o 'PDF_EXTRACT'
     archivo_fuente = Column(String(255), nullable=True)
     hash_deduplicacion = Column(String(64), unique=True, nullable=True, index=True)
+    estatus_factura = Column(String(20), default="PENDIENTE", nullable=True) # 'FACTURADO', 'PENDIENTE', 'NO_APLICA'
+    usuario_registro = Column(String(80), nullable=True)
+    traspaso_vinculado_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
 
     cuenta = relationship("Cuenta", back_populates="transacciones")
     categoria = relationship("Categoria", back_populates="transacciones")
     entidad = relationship("Entidad", back_populates="transacciones")
+
+class ReglaClasificacion(Base):
+    __tablename__ = "reglas_clasificacion"
+
+    id = Column(Integer, primary_key=True, index=True)
+    patron = Column(String(150), unique=True, nullable=False, index=True)
+    categoria_id = Column(Integer, ForeignKey("categorias.id", ondelete="SET NULL"), nullable=True)
+    entidad_id = Column(Integer, ForeignKey("entidades.id", ondelete="SET NULL"), nullable=True)
+    updated_at = Column(DateTime, server_default=func.now())
+
+class CierreMes(Base):
+    __tablename__ = "cierres_mes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    cuenta_id = Column(Integer, ForeignKey("cuentas.id", ondelete="CASCADE"), nullable=False, index=True)
+    anio = Column(Integer, nullable=False, index=True)
+    mes = Column(Integer, nullable=False, index=True)
+    saldo_banco_pdf = Column(Numeric(15, 2), nullable=True)
+    cerrado = Column(Boolean, default=False, nullable=False)
+    cerrado_por = Column(String(80), nullable=True)
+    updated_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("cuenta_id", "anio", "mes", name="uq_cierre_cuenta_anio_mes"),
+    )
 
 class EstadoCuentaArchivo(Base):
     __tablename__ = "estados_cuenta_archivos"

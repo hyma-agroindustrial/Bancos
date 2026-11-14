@@ -706,6 +706,12 @@
                     <span class="hidden sm:inline">Catálogos</span>
                 </button>
 
+                <!-- Botón Respaldo Base de Datos (Solo ADMIN) -->
+                <a x-show="usuarioActual && usuarioActual.rol === 'ADMIN'" href="/api/backup/download" title="Descargar copia de respaldo de la base de datos contable" class="text-xs bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 p-2 sm:px-2.5 sm:py-2 rounded-lg font-bold transition flex items-center gap-1">
+                    <span>💾</span>
+                    <span class="hidden lg:inline">Respaldo</span>
+                </a>
+
                 <!-- Badge Usuario Actual & Logout -->
                 <div class="flex items-center pl-2 border-l border-slate-800 space-x-2" x-show="usuarioActual">
                     <span class="text-xs font-semibold px-2 py-1 rounded-md border flex items-center gap-1.5"
@@ -737,6 +743,12 @@
                     </div>
                 </div>
                 <div class="flex items-center gap-2 no-print">
+                    <button type="button"
+                            @click="exportarExcelConcentradoBancos()"
+                            class="text-xs bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 px-3 py-2 rounded-xl font-bold transition flex items-center gap-1.5 shadow-sm">
+                        <span>📗</span>
+                        <span>Exportar Excel</span>
+                    </button>
                     <button type="button"
                             @click="window.print()"
                             class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-2 rounded-xl font-bold transition flex items-center gap-1.5 shadow-sm">
@@ -1065,6 +1077,9 @@
                                     <option :value="ent.id" x-text="ent.nombre + (ent.rfc ? ' (' + ent.rfc + ')' : '')"></option>
                                 </template>
                             </select>
+                            <div x-show="entidadesFiltradas.length > 6" class="mt-1">
+                                <input type="text" x-model="busquedaEntidadForm" placeholder="🔍 Filtrar cliente/proveedor por nombre o RFC..." class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-300">
+                            </div>
                         </div>
 
                         <!-- Monto -->
@@ -1077,7 +1092,26 @@
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- Bloque Especial: Traspaso Espejo Automático entre Cuentas Propias -->
+                    <div x-show="esCategoriaTraspasoSeleccionada()" x-cloak class="bg-emerald-950/30 border border-emerald-700/60 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                            <span class="text-xs font-black text-emerald-400 uppercase tracking-wide flex items-center gap-1.5">
+                                <span>🔄</span> <span>Traspaso Interbancario con Movimiento Espejo Automático</span>
+                            </span>
+                            <p class="text-[11px] text-slate-400 mt-0.5">Selecciona la cuenta propia contraparte para registrar automáticamente el abono/cargo espejo en el otro banco sin doble captura.</p>
+                        </div>
+                        <div class="sm:w-80 shrink-0">
+                            <label class="block text-[10px] font-bold uppercase text-emerald-400 mb-1" x-text="form.tipo === 'SALIDA' ? 'Cuenta Destino (Recibe el Abono Espejo)' : 'Cuenta Origen (Registra el Cargo Espejo)'"></label>
+                            <select x-model="form.cuenta_destino_id" class="w-full bg-slate-900 border border-emerald-600 rounded-xl px-3 py-1.5 text-xs text-white font-bold">
+                                <option value="">(Solo registrar en esta cuenta)</option>
+                                <template x-for="cta in cuentasPermitidas.filter(c => !cuentaActivaPrincipal || Number(c.id) !== Number(cuentaActivaPrincipal.id))" :key="'dest-' + cta.id">
+                                    <option :value="cta.id" x-text="formatCuentaLabel(cta)"></option>
+                                </template>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <!-- Concepto / Descripción -->
                         <div>
                             <label class="block text-xs font-semibold text-slate-300 mb-1">Concepto o Detalle *</label>
@@ -1089,12 +1123,22 @@
                             <label class="block text-xs font-semibold text-slate-300 mb-1">Referencia o Folio SPEI (Opcional)</label>
                             <input type="text" x-model="form.referencia" placeholder="Ej. Factura 128 / Folio SPEI 99182" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 font-mono">
                         </div>
+
+                        <!-- Estatus Fiscal CFDI -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Estatus Comprobante Fiscal (CFDI)</label>
+                            <select x-model="form.estatus_factura" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-semibold focus:ring-2 focus:ring-emerald-500">
+                                <option value="PENDIENTE">⏳ Pendiente de Factura</option>
+                                <option value="FACTURADO">📄 Facturado (CFDI Recibido)</option>
+                                <option value="NO_APLICA">➖ No Aplica (Comisión / Traspaso)</option>
+                            </select>
+                        </div>
                     </div>
 
                     <div class="flex justify-end pt-3 border-t border-slate-800">
                         <button type="submit" :disabled="loading" class="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm px-6 py-2.5 rounded-xl shadow-lg shadow-emerald-950 transition flex items-center justify-center gap-2">
                             <span x-show="loading" class="animate-spin">⏳</span>
-                            <span>Registrar Movimiento</span>
+                            <span x-text="form.cuenta_destino_id ? 'Registrar Traspaso en Ambos Bancos' : 'Registrar Movimiento'"></span>
                         </button>
                     </div>
                 </form>
@@ -1105,9 +1149,9 @@
                 <div class="bg-slate-900 border border-dashed border-slate-700 rounded-2xl p-6 text-center max-w-xl mx-auto">
                     <div class="text-4xl mb-2">📑</div>
                     <h3 class="text-base font-bold text-white mb-1">Cargar Estado de Cuenta PDF</h3>
-                    <p class="text-xs text-slate-400 mb-4">Extracción automática de cargos, abonos y detección de movimientos duplicados.</p>
+                    <p class="text-xs text-slate-400 mb-4">Extracción inteligente con memoria de proveedores/RFC, detección de duplicados y archivado automático en el expediente.</p>
 
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left mb-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left mb-3">
                         <div>
                             <label class="block text-xs font-semibold text-slate-300 mb-1">Cuenta Destino (Activa) *</label>
                             <select x-model="pdfCuentaId" disabled class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-bold opacity-95 cursor-not-allowed">
@@ -1120,6 +1164,13 @@
                             <label class="block text-xs font-semibold text-slate-300 mb-1">Archivo PDF *</label>
                             <input type="file" accept=".pdf" @change="onPdfFileSelected" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-500">
                         </div>
+                    </div>
+
+                    <div class="flex items-center justify-center gap-2 mb-4 text-xs text-slate-300">
+                        <label class="inline-flex items-center gap-2 cursor-pointer bg-slate-950/80 border border-slate-800 px-3 py-1.5 rounded-xl">
+                            <input type="checkbox" x-model="archivarPdfAlImportar" class="rounded border-slate-700 text-emerald-600 focus:ring-emerald-500">
+                            <span>📁 Guardar automáticamente este PDF en el expediente de <strong>Estados de Cuenta</strong> al importar</span>
+                        </label>
                     </div>
 
                     <button @click="procesarPdf" :disabled="loading || !pdfFile || !pdfCuentaId" class="w-full sm:w-auto bg-emerald-600 disabled:opacity-40 hover:bg-emerald-500 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition shadow-md">
@@ -1216,7 +1267,24 @@
             <div x-show="activeTab === 'reportes'" class="p-4 sm:p-6 space-y-5 print-document">
                 <!-- BARRA DE FILTROS Y ACCIÓN DE IMPRESIÓN (NO PRINT) -->
                 <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 space-y-3 no-print">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+                    <!-- Fila 1: Buscador Instantáneo + Botones Rápidos de Periodo -->
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-2.5 pb-2.5 border-b border-slate-800/80">
+                        <div class="relative flex-1">
+                            <span class="absolute left-3 top-1.5 text-slate-400 text-xs">🔍</span>
+                            <input type="text" x-model="filtros.busqueda" placeholder="Buscar por concepto, monto ($), referencia SPEI o proveedor..." class="w-full bg-slate-950 border border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white focus:ring-2 focus:ring-emerald-500">
+                        </div>
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <span class="text-[10px] font-bold uppercase text-slate-400 mr-1">Periodo Rápido:</span>
+                            <button type="button" @click="aplicarPeriodoRapido('hoy')" class="text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-2.5 py-1 rounded-lg font-semibold transition">Hoy</button>
+                            <button type="button" @click="aplicarPeriodoRapido('mes_actual')" class="text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-2.5 py-1 rounded-lg font-semibold transition">Este Mes</button>
+                            <button type="button" @click="aplicarPeriodoRapido('mes_anterior')" class="text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-2.5 py-1 rounded-lg font-semibold transition">Mes Anterior</button>
+                            <button type="button" @click="aplicarPeriodoRapido('30_dias')" class="text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-2.5 py-1 rounded-lg font-semibold transition">Últimos 30 días</button>
+                            <button type="button" @click="aplicarPeriodoRapido('anio_actual')" class="text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-2.5 py-1 rounded-lg font-semibold transition">Año Actual</button>
+                        </div>
+                    </div>
+
+                    <!-- Fila 2: Filtros de Cuenta, Categoría, Proveedor, CFDI y Fechas -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3">
                         <div>
                             <label class="block text-[11px] font-semibold text-slate-400 mb-1">Cuenta Activa</label>
                             <select x-model="filtros.cuenta_id" disabled class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-bold opacity-95 cursor-not-allowed">
@@ -1230,6 +1298,7 @@
                             <label class="block text-[11px] font-semibold text-slate-400 mb-1">Categoría</label>
                             <select x-model="filtros.categoria_id" @change="filtrarTransacciones" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
                                 <option value="">Todas las categorías</option>
+                                <option value="__SIN_CATEGORIA__">⚠️ Sin Categoría Asignada</option>
                                 <template x-for="cat in categorias" :key="cat.id">
                                     <option :value="cat.id" x-text="cat.nombre"></option>
                                 </template>
@@ -1247,6 +1316,16 @@
                         </div>
 
                         <div>
+                            <label class="block text-[11px] font-semibold text-slate-400 mb-1">Estatus Factura CFDI</label>
+                            <select x-model="filtros.estatus_factura" @change="filtrarTransacciones" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
+                                <option value="">Todos los estatus</option>
+                                <option value="PENDIENTE">⏳ Pendiente de Factura</option>
+                                <option value="FACTURADO">📄 Facturado (CFDI)</option>
+                                <option value="NO_APLICA">➖ No Aplica</option>
+                            </select>
+                        </div>
+
+                        <div>
                             <label class="block text-[11px] font-semibold text-slate-400 mb-1">Fecha Desde</label>
                             <input type="date" x-model="filtros.fecha_inicio" @change="filtrarTransacciones" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white">
                         </div>
@@ -1258,15 +1337,64 @@
                     </div>
 
                     <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/80">
-                        <div class="text-[11px] text-slate-400">
-                            Mostrando <span class="font-bold text-white" x-text="transacciones.length"></span> movimiento(s) con los filtros seleccionados.
+                        <div class="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                            <span>Mostrando <strong class="text-white" x-text="transaccionesMostradas.length"></strong> movimiento(s).</span>
+                            <button type="button"
+                                    x-show="conteoSinCategoria > 0"
+                                    @click="filtros.categoria_id = '__SIN_CATEGORIA__'"
+                                    class="px-2 py-0.5 rounded-full bg-amber-950 text-amber-400 border border-amber-700 font-bold text-[10px] hover:opacity-90 transition">
+                                ⚠️ <span x-text="conteoSinCategoria"></span> sin categoría
+                            </button>
+                            <button type="button"
+                                    x-show="conteoPendientesFactura > 0"
+                                    @click="filtros.estatus_factura = 'PENDIENTE'; filtrarTransacciones()"
+                                    class="px-2 py-0.5 rounded-full bg-rose-950 text-rose-400 border border-rose-700 font-bold text-[10px] hover:opacity-90 transition">
+                                ⏳ <span x-text="conteoPendientesFactura"></span> pendiente(s) de factura
+                            </button>
                         </div>
-                        <div class="flex items-center gap-2">
+                        <div class="flex flex-wrap items-center gap-2">
                             <button @click="limpiarFiltrosReporte()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-semibold text-xs px-3 py-1.5 rounded-lg transition flex items-center gap-1">
                                 <span>🔄</span> <span>Limpiar Filtros</span>
                             </button>
-                            <button @click="imprimirReporteMovimientos()" :disabled="transacciones.length === 0" class="bg-emerald-600 disabled:opacity-40 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-1.5 rounded-lg transition flex items-center gap-1.5 shadow-md">
+                            <button @click="exportarExcelReporte()" :disabled="transaccionesMostradas.length === 0" class="bg-slate-800 disabled:opacity-40 hover:bg-slate-700 text-emerald-400 border border-slate-700 font-bold text-xs px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 shadow-sm">
+                                <span>📗</span> <span>Exportar Excel</span>
+                            </button>
+                            <button @click="imprimirReporteMovimientos()" :disabled="transaccionesMostradas.length === 0" class="bg-emerald-600 disabled:opacity-40 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-1.5 rounded-lg transition flex items-center gap-1.5 shadow-md">
                                 <span>🖨️</span> <span>Imprimir / Exportar Reporte PDF</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Barra de Edición Masiva (Aparece al seleccionar casillas en la tabla) -->
+                    <div x-show="seleccionadosReporte.length > 0" x-cloak class="mt-2 pt-3 border-t border-emerald-700/60 bg-emerald-950/30 rounded-xl p-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                        <div class="flex items-center gap-2">
+                            <span class="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-xs font-black" x-text="seleccionadosReporte.length + ' seleccionado(s)'"></span>
+                            <span class="text-xs font-bold text-white">Edición Masiva en un Clic:</span>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <select x-model="bulkForm.categoria_id" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
+                                <option value="">-- Asignar Categoría --</option>
+                                <template x-for="cat in categorias" :key="'bulk-cat-' + cat.id">
+                                    <option :value="cat.id" x-text="cat.nombre"></option>
+                                </template>
+                            </select>
+                            <select x-model="bulkForm.entidad_id" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
+                                <option value="">-- Asignar Cliente / Proveedor --</option>
+                                <template x-for="ent in entidades" :key="'bulk-ent-' + ent.id">
+                                    <option :value="ent.id" x-text="ent.nombre"></option>
+                                </template>
+                            </select>
+                            <select x-model="bulkForm.estatus_factura" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
+                                <option value="">-- Estatus CFDI --</option>
+                                <option value="FACTURADO">📄 Facturado</option>
+                                <option value="PENDIENTE">⏳ Pendiente</option>
+                                <option value="NO_APLICA">➖ No Aplica</option>
+                            </select>
+                            <button type="button" @click="aplicarEdicionMasiva()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-3.5 py-1.5 rounded-lg transition shadow-sm">
+                                ✅ Aplicar a Seleccionados
+                            </button>
+                            <button type="button" @click="seleccionadosReporte = []" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-2.5 py-1.5 rounded-lg border border-slate-700">
+                                Cancelar
                             </button>
                         </div>
                     </div>
@@ -1369,18 +1497,32 @@
                     <table class="w-full text-left text-xs text-slate-300 print-table">
                         <thead class="bg-slate-900 text-slate-400 uppercase font-semibold text-[10px]">
                             <tr>
-                                <th class="p-3" style="width: 11%;">Fecha</th>
-                                <th class="p-3" style="width: 21%;">Cuenta</th>
-                                <th class="p-3" style="width: 28%;">Concepto</th>
-                                <th class="p-3" style="width: 15%;">Categoría</th>
+                                <th class="p-3 w-8 text-center no-print">
+                                    <input type="checkbox"
+                                           :checked="transaccionesMostradas.length > 0 && seleccionadosReporte.length === transaccionesMostradas.length"
+                                           @change="toggleSeleccionarTodosReporte($event.target.checked)"
+                                           class="rounded border-slate-700 text-emerald-600 focus:ring-emerald-500">
+                                </th>
+                                <th class="p-3" style="width: 10%;">Fecha</th>
+                                <th class="p-3" style="width: 17%;">Cuenta</th>
+                                <th class="p-3" style="width: 24%;">Concepto</th>
+                                <th class="p-3" style="width: 14%;">Categoría</th>
                                 <th class="p-3" style="width: 13%;">Cliente / Proveedor</th>
-                                <th class="p-3 text-right" style="width: 12%;">Monto</th>
+                                <th class="p-3 text-center no-print" style="width: 9%;">CFDI</th>
+                                <th class="p-3 text-right" style="width: 10%;">Monto</th>
+                                <th class="p-3 text-right no-print" style="width: 10%;">Saldo Corrido</th>
                                 <th class="p-3 text-center no-print">Acciones</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-800/80">
-                            <template x-for="t in transacciones" :key="t.id">
-                                <tr class="hover:bg-slate-900/50">
+                            <template x-for="t in transaccionesMostradas" :key="t.id">
+                                <tr class="hover:bg-slate-900/50" :class="seleccionadosReporte.includes(t.id) ? 'bg-emerald-950/20' : ''">
+                                    <td class="p-3 text-center no-print">
+                                        <input type="checkbox"
+                                               :value="t.id"
+                                               x-model="seleccionadosReporte"
+                                               class="rounded border-slate-700 text-emerald-600 focus:ring-emerald-500">
+                                    </td>
                                     <td class="p-3 font-mono text-slate-400 print-dark-text whitespace-nowrap" x-text="t.fecha"></td>
                                     <td class="p-3">
                                         <div class="font-bold text-white print-dark-text flex items-center gap-1.5 flex-wrap">
@@ -1391,13 +1533,28 @@
                                     </td>
                                     <td class="p-3 font-medium text-white print-dark-text max-w-sm break-words">
                                         <div x-text="t.concepto"></div>
-                                        <div x-show="t.referencia" class="text-[10px] font-mono text-slate-400 print-muted-text" x-text="'Ref: ' + t.referencia"></div>
+                                        <div class="flex flex-wrap items-center gap-2 mt-0.5">
+                                            <span x-show="t.referencia" class="text-[10px] font-mono text-slate-400 print-muted-text" x-text="'Ref: ' + t.referencia"></span>
+                                            <span x-show="t.usuario_registro" class="text-[9px] font-mono text-slate-500 no-print" x-text="'👤 ' + t.usuario_registro"></span>
+                                        </div>
                                     </td>
                                     <td class="p-3">
-                                        <span class="px-2 py-0.5 rounded text-[11px] bg-slate-800 text-slate-300 border border-slate-700 print-card inline-block" x-text="t.categoria_nombre || 'Sin Asignar'"></span>
+                                        <span class="px-2 py-0.5 rounded text-[11px] border print-card inline-block"
+                                              :class="t.categoria_nombre ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-amber-950 text-amber-400 border-amber-700 font-bold'"
+                                              x-text="t.categoria_nombre || '⚠️ Sin Asignar'"></span>
                                     </td>
                                     <td class="p-3 text-emerald-400 print-dark-text font-medium" x-text="t.entidad_nombre || '-'"></td>
+                                    <td class="p-3 text-center no-print">
+                                        <button type="button"
+                                                @click="ciclarEstatusFactura(t)"
+                                                title="Haz clic para cambiar entre Facturado, Pendiente y No Aplica"
+                                                class="px-2 py-0.5 rounded-full text-[10px] font-bold border transition whitespace-nowrap"
+                                                :class="t.estatus_factura === 'FACTURADO' ? 'bg-emerald-950 text-emerald-400 border-emerald-700' : (t.estatus_factura === 'NO_APLICA' ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-amber-950 text-amber-400 border-amber-700')">
+                                            <span x-text="t.estatus_factura === 'FACTURADO' ? '📄 Facturado' : (t.estatus_factura === 'NO_APLICA' ? '➖ N/A' : '⏳ Pendiente')"></span>
+                                        </button>
+                                    </td>
                                     <td class="p-3 text-right font-mono font-bold whitespace-nowrap" :class="t.tipo === 'ENTRADA' ? 'text-emerald-400 print-badge-abono' : 'text-rose-400 print-badge-cargo'" x-text="(t.tipo === 'ENTRADA' ? '+' : '-') + ' ' + formatMoney(t.monto)"></td>
+                                    <td class="p-3 text-right font-mono font-semibold text-slate-300 whitespace-nowrap no-print" x-text="t.saldo_corrido !== undefined ? formatMoney(t.saldo_corrido) : '-'"></td>
                                     <td class="p-3 text-center no-print">
                                         <div class="flex items-center justify-center space-x-1.5">
                                             <button @click="abrirModalEditarTransaccion(t)" title="Modificar Movimiento" class="p-1.5 text-slate-400 hover:text-white bg-slate-900 hover:bg-slate-700 rounded-lg text-xs transition">
@@ -1410,49 +1567,53 @@
                                     </td>
                                 </tr>
                             </template>
-                            <tr x-show="transacciones.length === 0">
-                                <td colspan="7" class="p-6 text-center text-slate-500">No se encontraron movimientos con los filtros aplicados.</td>
+                            <tr x-show="transaccionesMostradas.length === 0">
+                                <td colspan="10" class="p-6 text-center text-slate-500">No se encontraron movimientos con los filtros aplicados.</td>
                             </tr>
                         </tbody>
                         <!-- FILA DE CONTEO Y SUMA FINAL AL PIE DEL REPORTE -->
-                        <tfoot x-show="transacciones.length > 0" class="bg-slate-900/95 border-t-2 border-slate-700 font-bold">
+                        <tfoot x-show="transaccionesMostradas.length > 0" class="bg-slate-900/95 border-t-2 border-slate-700 font-bold">
                             <!-- Si el reporte tiene gastos/salidas, muestra la suma total de los gastos hechos en este reporte -->
-                            <tr x-show="resumenReporte.total_salidas > 0">
-                                <td colspan="5" class="p-3 text-right uppercase tracking-wider text-xs text-slate-300 print-dark-text">
-                                    TOTAL DE GASTOS REALIZADOS EN ESTE REPORTE (<span x-text="transacciones.filter(t => t.tipo === 'SALIDA').length"></span> movimiento<span x-show="transacciones.filter(t => t.tipo === 'SALIDA').length !== 1">s</span>):
-                                </td>
-                                <td class="p-3 text-right font-mono text-sm font-black text-rose-400 print-badge-cargo whitespace-nowrap" x-text="'- ' + formatMoney(resumenReporte.total_salidas)"></td>
+                            <tr x-show="resumenReporteMostrado.total_salidas > 0">
                                 <td class="no-print"></td>
+                                <td colspan="5" class="p-3 text-right uppercase tracking-wider text-xs text-slate-300 print-dark-text">
+                                    TOTAL DE GASTOS REALIZADOS EN ESTE REPORTE (<span x-text="transaccionesMostradas.filter(t => t.tipo === 'SALIDA').length"></span> movimiento<span x-show="transaccionesMostradas.filter(t => t.tipo === 'SALIDA').length !== 1">s</span>):
+                                </td>
+                                <td class="no-print"></td>
+                                <td class="p-3 text-right font-mono text-sm font-black text-rose-400 print-badge-cargo whitespace-nowrap" x-text="'- ' + formatMoney(resumenReporteMostrado.total_salidas)"></td>
+                                <td class="no-print" colspan="2"></td>
                             </tr>
                             <!-- Si el reporte es exclusivamente de entradas/abonos, muestra la suma de entradas -->
-                            <tr x-show="resumenReporte.total_salidas === 0 && resumenReporte.total_entradas > 0">
-                                <td colspan="5" class="p-3 text-right uppercase tracking-wider text-xs text-slate-300 print-dark-text">
-                                    TOTAL DE INGRESOS / ENTRADAS EN ESTE REPORTE (<span x-text="transacciones.filter(t => t.tipo === 'ENTRADA').length"></span> movimiento<span x-show="transacciones.filter(t => t.tipo === 'ENTRADA').length !== 1">s</span>):
-                                </td>
-                                <td class="p-3 text-right font-mono text-sm font-black text-emerald-400 print-badge-abono whitespace-nowrap" x-text="'+ ' + formatMoney(resumenReporte.total_entradas)"></td>
+                            <tr x-show="resumenReporteMostrado.total_salidas === 0 && resumenReporteMostrado.total_entradas > 0">
                                 <td class="no-print"></td>
+                                <td colspan="5" class="p-3 text-right uppercase tracking-wider text-xs text-slate-300 print-dark-text">
+                                    TOTAL DE INGRESOS / ENTRADAS EN ESTE REPORTE (<span x-text="transaccionesMostradas.filter(t => t.tipo === 'ENTRADA').length"></span> movimiento<span x-show="transaccionesMostradas.filter(t => t.tipo === 'ENTRADA').length !== 1">s</span>):
+                                </td>
+                                <td class="no-print"></td>
+                                <td class="p-3 text-right font-mono text-sm font-black text-emerald-400 print-badge-abono whitespace-nowrap" x-text="'+ ' + formatMoney(resumenReporteMostrado.total_entradas)"></td>
+                                <td class="no-print" colspan="2"></td>
                             </tr>
                         </tfoot>
                     </table>
                 </div>
 
                 <!-- RECUADRO EJECUTIVO DE SUMA FINAL AL PIE (PARA REPORTE Y PDF) -->
-                <div x-show="transacciones.length > 0" class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-900/80 border border-slate-800 rounded-xl p-4 print-card">
+                <div x-show="transaccionesMostradas.length > 0" class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-900/80 border border-slate-800 rounded-xl p-4 print-card">
                     <div class="text-xs text-slate-400 print-muted-text">
                         <span class="font-bold text-white print-dark-text">Resumen del Conteo Final:</span>
-                        Se contabilizaron <span class="font-mono font-bold text-white print-dark-text" x-text="transacciones.length"></span> registro(s) que cumplen con los filtros del reporte.
+                        Se contabilizaron <span class="font-mono font-bold text-white print-dark-text" x-text="transaccionesMostradas.length"></span> registro(s) que cumplen con los filtros del reporte.
                     </div>
                     <div class="flex items-center gap-4 self-end sm:self-auto">
-                        <template x-if="resumenReporte.total_salidas > 0">
+                        <template x-if="resumenReporteMostrado.total_salidas > 0">
                             <div class="text-right">
                                 <span class="text-[10px] uppercase font-bold text-slate-400 print-muted-text block">Suma Total de Gastos del Reporte</span>
-                                <span class="text-xl font-black font-mono text-rose-400 print-badge-cargo" x-text="formatMoney(resumenReporte.total_salidas)"></span>
+                                <span class="text-xl font-black font-mono text-rose-400 print-badge-cargo" x-text="formatMoney(resumenReporteMostrado.total_salidas)"></span>
                             </div>
                         </template>
-                        <template x-if="resumenReporte.total_salidas === 0 && resumenReporte.total_entradas > 0">
+                        <template x-if="resumenReporteMostrado.total_salidas === 0 && resumenReporteMostrado.total_entradas > 0">
                             <div class="text-right">
                                 <span class="text-[10px] uppercase font-bold text-slate-400 print-muted-text block">Suma Total de Ingresos del Reporte</span>
-                                <span class="text-xl font-black font-mono text-emerald-400 print-badge-abono" x-text="formatMoney(resumenReporte.total_entradas)"></span>
+                                <span class="text-xl font-black font-mono text-emerald-400 print-badge-abono" x-text="formatMoney(resumenReporteMostrado.total_entradas)"></span>
                             </div>
                         </template>
                     </div>
@@ -1510,16 +1671,69 @@
                         </div>
                     </div>
 
-                    <!-- Botones Generar e Imprimir -->
-                    <div class="flex items-center space-x-2 pt-2 md:pt-0">
+                    <!-- Botones Generar, Excel e Imprimir -->
+                    <div class="flex flex-wrap items-center gap-2 pt-2 md:pt-0">
                         <button @click="generarEstadoCuenta()" :disabled="loadingCorte" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-md">
                             <span x-show="loadingCorte">⏳</span>
                             <span>🔍 Generar Corte</span>
+                        </button>
+                        <button x-show="datosEstadoCuenta" @click="exportarExcelCorteMes()" class="bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 font-bold text-xs px-3.5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-md">
+                            <span>📗</span>
+                            <span>Exportar Excel</span>
                         </button>
                         <button x-show="datosEstadoCuenta" @click="imprimirEstadoCuenta()" class="bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 font-bold text-xs px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-md">
                             <span>🖨️</span>
                             <span>Imprimir / Guardar PDF</span>
                         </button>
+                    </div>
+                </div>
+
+                <!-- PANEL DE CONCILIACIÓN BANCARIA Y CANDADO DE CIERRE DE MES (NO PRINT) -->
+                <div x-show="datosEstadoCuenta" class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3 no-print">
+                    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                        <div class="flex-1 space-y-1">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-black uppercase tracking-wider text-white">⚖️ Semáforo de Conciliación Bancaria vs. PDF Oficial</span>
+                                <span x-show="datosEstadoCuenta && datosEstadoCuenta.cierre_mes && datosEstadoCuenta.cierre_mes.cerrado"
+                                      class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-950 text-emerald-400 border border-emerald-700">
+                                    🔒 Mes Cerrado y Conciliado
+                                </span>
+                            </div>
+                            <p class="text-xs text-slate-400">Ingresa el Saldo Final impreso en tu estado de cuenta bancario para verificar que cuadre al centavo y bloquear el periodo.</p>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-3">
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-slate-400 mb-1">Saldo Final según PDF del Banco ($)</label>
+                                <div class="flex items-center gap-1.5">
+                                    <input type="number" step="0.01" x-model="conciliacionSaldoBanco" placeholder="Ej. 47605.77" class="w-40 bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-mono font-bold">
+                                    <button type="button" @click="guardarConciliacionCorte(null)" class="bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 px-3 py-1.5 rounded-xl text-xs font-bold transition">
+                                        Guardar Saldo
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Indicador Semáforo en Vivo -->
+                            <div x-show="conciliacionSaldoBanco !== '' && conciliacionSaldoBanco !== null" class="px-3.5 py-2 rounded-xl border text-xs font-bold font-mono"
+                                 :class="Math.abs(diferenciaConciliacionCorte) < 0.01 ? 'bg-emerald-950/60 border-emerald-600 text-emerald-400' : 'bg-amber-950/60 border-amber-600 text-amber-400'">
+                                <template x-if="Math.abs(diferenciaConciliacionCorte) < 0.01">
+                                    <span>✅ CONCILIADO AL 100% (Dif: $0.00)</span>
+                                </template>
+                                <template x-if="Math.abs(diferenciaConciliacionCorte) >= 0.01">
+                                    <span x-text="'⚠️ DIFERENCIA: ' + formatMoney(diferenciaConciliacionCorte)"></span>
+                                </template>
+                            </div>
+
+                            <!-- Botón Candado de Cierre de Mes (Solo ADMIN) -->
+                            <div x-show="usuarioActual && usuarioActual.rol === 'ADMIN'">
+                                <button type="button"
+                                        @click="guardarConciliacionCorte(!(datosEstadoCuenta && datosEstadoCuenta.cierre_mes && datosEstadoCuenta.cierre_mes.cerrado))"
+                                        class="px-3.5 py-2 rounded-xl text-xs font-black transition border shadow-sm"
+                                        :class="datosEstadoCuenta && datosEstadoCuenta.cierre_mes && datosEstadoCuenta.cierre_mes.cerrado ? 'bg-amber-950 text-amber-300 border-amber-700 hover:opacity-90' : 'bg-emerald-600 text-white border-emerald-500 hover:bg-emerald-500'">
+                                    <span x-text="datosEstadoCuenta && datosEstadoCuenta.cierre_mes && datosEstadoCuenta.cierre_mes.cerrado ? '🔓 Reabrir Mes Contable' : '🔒 Cerrar y Bloquear Mes'"></span>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -2472,9 +2686,19 @@
                     <input type="text" x-model="editarTransForm.concepto" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
                 </div>
 
-                <div>
-                    <label class="block text-xs font-semibold text-slate-300 mb-1">Referencia o Folio SPEI (Opcional)</label>
-                    <input type="text" x-model="editarTransForm.referencia" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Referencia o Folio SPEI (Opcional)</label>
+                        <input type="text" x-model="editarTransForm.referencia" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Estatus Factura CFDI</label>
+                        <select x-model="editarTransForm.estatus_factura" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-bold">
+                            <option value="PENDIENTE">⏳ Pendiente de Factura</option>
+                            <option value="FACTURADO">✅ Facturado (Con CFDI)</option>
+                            <option value="NO_APLICA">➖ No Aplica CFDI</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div class="flex justify-end space-x-2 pt-3 border-t border-slate-800">
@@ -2791,16 +3015,28 @@
                     concepto: '',
                     referencia: '',
                     categoria_id: '',
-                    entidad_id: ''
+                    entidad_id: '',
+                    estatus_factura: 'PENDIENTE'
                 },
                 labelEntidadDinamica: 'Cliente / Proveedor',
                 labelModalEntidad: 'Entidad',
+                busquedaEntidadForm: '',
+                archivarPdfAlImportar: true,
+                seleccionadosReporte: [],
+                bulkForm: {
+                    categoria_id: '',
+                    entidad_id: '',
+                    estatus_factura: ''
+                },
+                conciliacionSaldoBanco: '',
                 
                 form: {
                     cuenta_id: '',
+                    cuenta_destino_id: '',
                     tipo: 'SALIDA',
                     categoria_id: '',
                     entidad_id: '',
+                    estatus_factura: 'PENDIENTE',
                     monto: '',
                     fecha: new Date().toISOString().split('T')[0],
                     concepto: '',
@@ -2860,6 +3096,8 @@
                     cuenta_id: '',
                     categoria_id: '',
                     entidad_id: '',
+                    estatus_factura: '',
+                    busqueda: '',
                     fecha_inicio: '',
                     fecha_fin: ''
                 },
@@ -3224,13 +3462,26 @@
 
                 get entidadesFiltradas() {
                     if (!this.entidades || this.entidades.length === 0) return [];
+                    let base = this.entidades;
                     const catActual = this.categorias.find(c => c.id == this.form.categoria_id);
-                    if (!catActual || !catActual.tipo_entidad_sugerida || catActual.tipo_entidad_sugerida === 'GENERAL') {
-                        return this.entidades;
+                    if (catActual && catActual.tipo_entidad_sugerida && catActual.tipo_entidad_sugerida !== 'GENERAL') {
+                        const sugeridos = this.entidades.filter(e => e.tipo_entidad === catActual.tipo_entidad_sugerida);
+                        const otros = this.entidades.filter(e => e.tipo_entidad !== catActual.tipo_entidad_sugerida);
+                        base = [...sugeridos, ...otros];
                     }
-                    const sugeridos = this.entidades.filter(e => e.tipo_entidad === catActual.tipo_entidad_sugerida);
-                    const otros = this.entidades.filter(e => e.tipo_entidad !== catActual.tipo_entidad_sugerida);
-                    return [...sugeridos, ...otros];
+                    const q = (this.busquedaEntidadForm || '').trim().toLowerCase();
+                    if (!q) return base;
+                    return base.filter(e =>
+                        (e.nombre && e.nombre.toLowerCase().includes(q)) ||
+                        (e.rfc && e.rfc.toLowerCase().includes(q)) ||
+                        (e.tipo_entidad && e.tipo_entidad.toLowerCase().includes(q))
+                    );
+                },
+
+                esCategoriaTraspasoSeleccionada() {
+                    const cat = this.categorias.find(c => String(c.id) === String(this.form.categoria_id));
+                    if (!cat || !cat.nombre) return false;
+                    return cat.nombre.toUpperCase().includes('TRASPASO');
                 },
 
                 get categoriasCatalogoFiltradas() {
@@ -3248,6 +3499,7 @@
                 onTipoChange() {
                     this.form.categoria_id = '';
                     this.form.entidad_id = '';
+                    this.form.cuenta_destino_id = '';
                     this.labelEntidadDinamica = 'Beneficiario / Proveedor (Opcional)';
                 },
 
@@ -3255,7 +3507,17 @@
                     const cat = this.categorias.find(c => c.id == this.form.categoria_id);
                     if (!cat) {
                         this.labelEntidadDinamica = 'Beneficiario / Proveedor (Opcional)';
+                        this.form.cuenta_destino_id = '';
                         return;
+                    }
+                    if (!this.esCategoriaTraspasoSeleccionada()) {
+                        this.form.cuenta_destino_id = '';
+                    } else {
+                        this.form.estatus_factura = 'NO_APLICA';
+                    }
+                    const nomUpper = (cat.nombre || '').toUpperCase();
+                    if (nomUpper.includes('COMISION') || nomUpper.includes('COMISIÓN') || nomUpper.includes('IMPUESTO') || nomUpper.includes('NOMINA') || nomUpper.includes('NÓMINA')) {
+                        this.form.estatus_factura = 'NO_APLICA';
                     }
                     if (cat.tipo_entidad_sugerida === 'CLIENTE') {
                         this.labelEntidadDinamica = 'Cliente que pagó (Opcional)';
@@ -3720,8 +3982,11 @@
                     try {
                         const payload = {
                             cuenta_id: parseInt(this.form.cuenta_id),
+                            cuenta_destino_id: this.form.cuenta_destino_id ? parseInt(this.form.cuenta_destino_id) : null,
                             categoria_id: this.form.categoria_id ? parseInt(this.form.categoria_id) : null,
                             entidad_id: this.form.entidad_id ? parseInt(this.form.entidad_id) : null,
+                            estatus_factura: this.form.estatus_factura || 'PENDIENTE',
+                            usuario_registro: this.usuarioActual ? this.usuarioActual.username : 'admin',
                             fecha: this.form.fecha,
                             tipo: this.form.tipo,
                             monto: parseFloat(this.form.monto),
@@ -3735,11 +4000,15 @@
                             body: JSON.stringify(payload)
                         });
                         if (res.ok) {
-                            alert('✅ Movimiento registrado con éxito.');
+                            alert(payload.cuenta_destino_id
+                                ? '✅ Traspaso registrado con éxito (se creó automáticamente el movimiento espejo en la cuenta destino).'
+                                : '✅ Movimiento registrado con éxito.');
                             this.form.monto = '';
                             this.form.concepto = '';
                             this.form.referencia = '';
                             this.form.entidad_id = '';
+                            this.form.cuenta_destino_id = '';
+                            this.busquedaEntidadForm = '';
                             await this.cargarCuentas();
                             await this.filtrarTransacciones();
                         } else {
@@ -3805,6 +4074,8 @@
                         const payload = {
                             cuenta_id: cuentaDestinoId,
                             archivo_nombre: this.pdfFile ? this.pdfFile.name : 'estado_cuenta.pdf',
+                            archivar_pdf: Boolean(this.archivarPdfAlImportar),
+                            usuario_registro: this.usuarioActual ? this.usuarioActual.username : 'admin',
                             movimientos: movimientosSanitizados
                         };
                         const res = await fetch('/api/transacciones/batch-import', {
@@ -3822,6 +4093,7 @@
                             this.filtros.fecha_fin = '';
                             await this.cargarCuentas();
                             await this.filtrarTransacciones();
+                            await this.cargarArchivosEstadoCuenta();
                             this.activeTab = 'reportes';
                         } else {
                             const err = await res.json().catch(() => ({}));
@@ -3844,6 +4116,7 @@
 
                 get nombreCategoriaFiltroReporte() {
                     if (!this.filtros.categoria_id) return 'Todas las categorías';
+                    if (this.filtros.categoria_id === '__SIN_CATEGORIA__') return 'Sin Categoría';
                     const cat = this.categorias.find(c => String(c.id) === String(this.filtros.categoria_id));
                     return cat ? cat.nombre : 'Todas las categorías';
                 },
@@ -3854,15 +4127,186 @@
                     return ent ? ent.nombre : 'Todos';
                 },
 
+                get transaccionesConSaldoCorrido() {
+                    if (!this.transacciones || this.transacciones.length === 0) return [];
+                    // Ordenar cronológicamente (antiguo -> reciente) para calcular el saldo corrido si no hay filtros parciales,
+                    // o caminar desde el saldo actual hacia atrás cuando está ordenado descendente
+                    const cta = this.cuentaActivaReporte;
+                    const tieneFiltroParcial = Boolean(this.filtros.categoria_id && this.filtros.categoria_id !== '') || Boolean(this.filtros.entidad_id);
+                    if (tieneFiltroParcial || !cta) {
+                        // Acumulado progresivo del subconjunto
+                        const asc = [...this.transacciones].reverse();
+                        let acum = 0;
+                        const mapaSaldo = new Map();
+                        for (const t of asc) {
+                            const m = parseFloat(t.monto) || 0;
+                            acum += (t.tipo === 'ENTRADA' ? m : -m);
+                            mapaSaldo.set(t.id, acum);
+                        }
+                        return this.transacciones.map(t => ({ ...t, saldo_corrido: mapaSaldo.get(t.id) || 0 }));
+                    }
+                    // Si no hay filtro parcial y estamos viendo la cuenta completa (o hasta hoy), caminamos desde saldo_actual o desde el inicio
+                    let saldoCursor = parseFloat(cta.saldo_actual) || 0;
+                    if (!this.filtros.fecha_fin) {
+                        return this.transacciones.map(t => {
+                            const fila = { ...t, saldo_corrido: saldoCursor };
+                            const m = parseFloat(t.monto) || 0;
+                            saldoCursor -= (t.tipo === 'ENTRADA' ? m : -m);
+                            return fila;
+                        });
+                    }
+                    const asc = [...this.transacciones].reverse();
+                    let acum = 0;
+                    const mapaSaldo = new Map();
+                    for (const t of asc) {
+                        const m = parseFloat(t.monto) || 0;
+                        acum += (t.tipo === 'ENTRADA' ? m : -m);
+                        mapaSaldo.set(t.id, acum);
+                    }
+                    return this.transacciones.map(t => ({ ...t, saldo_corrido: mapaSaldo.get(t.id) || 0 }));
+                },
+
+                get transaccionesMostradas() {
+                    let lista = this.transaccionesConSaldoCorrido;
+                    if (this.filtros.categoria_id === '__SIN_CATEGORIA__') {
+                        lista = lista.filter(t => !t.categoria_id);
+                    }
+                    if (this.filtros.estatus_factura) {
+                        lista = lista.filter(t => (t.estatus_factura || 'PENDIENTE') === this.filtros.estatus_factura);
+                    }
+                    const q = (this.filtros.busqueda || '').trim().toLowerCase();
+                    if (q) {
+                        lista = lista.filter(t =>
+                            (t.concepto && t.concepto.toLowerCase().includes(q)) ||
+                            (t.referencia && t.referencia.toLowerCase().includes(q)) ||
+                            (t.entidad_nombre && t.entidad_nombre.toLowerCase().includes(q)) ||
+                            (t.categoria_nombre && t.categoria_nombre.toLowerCase().includes(q)) ||
+                            String(t.monto || '').includes(q)
+                        );
+                    }
+                    return lista;
+                },
+
+                get resumenReporteMostrado() {
+                    const lista = this.transaccionesMostradas;
+                    const ent = lista.filter(t => t.tipo === 'ENTRADA').reduce((s, t) => s + (parseFloat(t.monto) || 0), 0);
+                    const sal = lista.filter(t => t.tipo === 'SALIDA').reduce((s, t) => s + (parseFloat(t.monto) || 0), 0);
+                    return {
+                        total_entradas: ent,
+                        total_salidas: sal,
+                        balance_periodo: ent - sal
+                    };
+                },
+
+                get conteoSinCategoria() {
+                    return (this.transacciones || []).filter(t => !t.categoria_id).length;
+                },
+
+                get conteoPendientesFactura() {
+                    return (this.transacciones || []).filter(t => (t.estatus_factura || 'PENDIENTE') === 'PENDIENTE').length;
+                },
+
+                aplicarPeriodoRapido(tipo) {
+                    const hoy = new Date();
+                    const fmt = (d) => d.toISOString().split('T')[0];
+                    if (tipo === 'hoy') {
+                        const f = fmt(hoy);
+                        this.filtros.fecha_inicio = f;
+                        this.filtros.fecha_fin = f;
+                    } else if (tipo === 'mes_actual') {
+                        const ini = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+                        const fin = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
+                        this.filtros.fecha_inicio = fmt(ini);
+                        this.filtros.fecha_fin = fmt(fin);
+                    } else if (tipo === 'mes_anterior') {
+                        const ini = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
+                        const fin = new Date(hoy.getFullYear(), hoy.getMonth(), 0);
+                        this.filtros.fecha_inicio = fmt(ini);
+                        this.filtros.fecha_fin = fmt(fin);
+                    } else if (tipo === '30_dias') {
+                        const ini = new Date(hoy.getTime() - 30 * 24 * 60 * 60 * 1000);
+                        this.filtros.fecha_inicio = fmt(ini);
+                        this.filtros.fecha_fin = fmt(hoy);
+                    } else if (tipo === 'anio_actual') {
+                        const ini = new Date(hoy.getFullYear(), 0, 1);
+                        const fin = new Date(hoy.getFullYear(), 11, 31);
+                        this.filtros.fecha_inicio = fmt(ini);
+                        this.filtros.fecha_fin = fmt(fin);
+                    }
+                    this.filtrarTransacciones();
+                },
+
+                toggleSeleccionarTodosReporte(checked) {
+                    if (checked) {
+                        this.seleccionadosReporte = this.transaccionesMostradas.map(t => t.id);
+                    } else {
+                        this.seleccionadosReporte = [];
+                    }
+                },
+
+                async aplicarEdicionMasiva() {
+                    if (!this.seleccionadosReporte || this.seleccionadosReporte.length === 0) return;
+                    if (!this.bulkForm.categoria_id && !this.bulkForm.entidad_id && !this.bulkForm.estatus_factura) {
+                        alert('⚠️ Selecciona al menos una Categoría, Proveedor/Cliente o Estatus CFDI para aplicar al lote.');
+                        return;
+                    }
+                    this.loading = true;
+                    try {
+                        const payload = {
+                            ids: this.seleccionadosReporte.map(Number),
+                            categoria_id: this.bulkForm.categoria_id ? parseInt(this.bulkForm.categoria_id) : null,
+                            entidad_id: this.bulkForm.entidad_id ? parseInt(this.bulkForm.entidad_id) : null,
+                            estatus_factura: this.bulkForm.estatus_factura || null
+                        };
+                        const res = await fetch('/api/transacciones/bulk-update', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        if (res.ok) {
+                            const data = await res.json();
+                            alert(data.message || '✅ Movimientos actualizados en lote.');
+                            this.seleccionadosReporte = [];
+                            this.bulkForm = { categoria_id: '', entidad_id: '', estatus_factura: '' };
+                            await this.filtrarTransacciones();
+                        } else {
+                            const err = await res.json().catch(() => ({}));
+                            alert(err.detail || 'Error al aplicar edición masiva.');
+                        }
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async ciclarEstatusFactura(t) {
+                    const orden = ['PENDIENTE', 'FACTURADO', 'NO_APLICA'];
+                    const actual = t.estatus_factura || 'PENDIENTE';
+                    const sig = orden[(orden.indexOf(actual) + 1) % orden.length];
+                    try {
+                        const res = await fetch(`/api/transacciones/${t.id}/factura?estatus_factura=${sig}`, {
+                            method: 'PATCH'
+                        });
+                        if (res.ok) {
+                            t.estatus_factura = sig;
+                        } else {
+                            const err = await res.json().catch(() => ({}));
+                            alert(err.detail || 'No se pudo cambiar el estatus fiscal.');
+                        }
+                    } catch (e) {}
+                },
+
                 limpiarFiltrosReporte() {
                     const idActiva = this.cuentaActivaPrincipal ? String(this.cuentaActivaPrincipal.id) : '';
                     this.filtros = {
                         cuenta_id: idActiva,
                         categoria_id: '',
                         entidad_id: '',
+                        estatus_factura: '',
+                        busqueda: '',
                         fecha_inicio: '',
                         fecha_fin: ''
                     };
+                    this.seleccionadosReporte = [];
                     this.filtrarTransacciones();
                 },
 
@@ -3880,7 +4324,9 @@
                     this.filtros.cuenta_id = idActiva;
                     const params = new URLSearchParams();
                     params.append('cuenta_id', idActiva);
-                    if (this.filtros.categoria_id) params.append('categoria_id', this.filtros.categoria_id);
+                    if (this.filtros.categoria_id && this.filtros.categoria_id !== '__SIN_CATEGORIA__') {
+                        params.append('categoria_id', this.filtros.categoria_id);
+                    }
                     if (this.filtros.entidad_id) params.append('entidad_id', this.filtros.entidad_id);
                     if (this.filtros.fecha_inicio) params.append('fecha_inicio', this.filtros.fecha_inicio);
                     if (this.filtros.fecha_fin) params.append('fecha_fin', this.filtros.fecha_fin);
@@ -3895,8 +4341,8 @@
                             todas = todas.filter(t => idsPermitidos.includes(Number(t.cuenta_id)));
                         }
                         this.transacciones = todas;
+                        this.seleccionadosReporte = [];
 
-                        // Calcular el resumen exactamente sobre los movimientos filtrados de este reporte
                         const ent = todas
                             .filter(t => t.tipo === 'ENTRADA')
                             .reduce((s, t) => s + (parseFloat(t.monto) || 0), 0);
@@ -3922,7 +4368,8 @@
                         concepto: t.concepto,
                         referencia: t.referencia || '',
                         categoria_id: t.categoria_id ? t.categoria_id.toString() : '',
-                        entidad_id: t.entidad_id ? t.entidad_id.toString() : ''
+                        entidad_id: t.entidad_id ? t.entidad_id.toString() : '',
+                        estatus_factura: t.estatus_factura || 'PENDIENTE'
                     };
                     this.openModalEditarTransaccion = true;
                 },
@@ -3934,6 +4381,7 @@
                             cuenta_id: parseInt(this.editarTransForm.cuenta_id),
                             categoria_id: this.editarTransForm.categoria_id ? parseInt(this.editarTransForm.categoria_id) : null,
                             entidad_id: this.editarTransForm.entidad_id ? parseInt(this.editarTransForm.entidad_id) : null,
+                            estatus_factura: this.editarTransForm.estatus_factura || 'PENDIENTE',
                             fecha: this.editarTransForm.fecha,
                             tipo: this.editarTransForm.tipo,
                             monto: parseFloat(this.editarTransForm.monto),
@@ -4004,6 +4452,11 @@
                         const res = await fetch(`/api/reportes/estado-cuenta?cuenta_id=${this.corteCuentaId}&mes=${this.corteMes}&anio=${this.corteAnio}`);
                         if (res.ok) {
                             this.datosEstadoCuenta = await res.json();
+                            if (this.datosEstadoCuenta.cierre_mes && this.datosEstadoCuenta.cierre_mes.saldo_banco_pdf !== null && this.datosEstadoCuenta.cierre_mes.saldo_banco_pdf !== undefined) {
+                                this.conciliacionSaldoBanco = this.datosEstadoCuenta.cierre_mes.saldo_banco_pdf;
+                            } else {
+                                this.conciliacionSaldoBanco = '';
+                            }
                         } else {
                             const err = await res.json();
                             alert(err.detail || 'Error al generar corte de mes');
@@ -4013,6 +4466,129 @@
                     } finally {
                         this.loadingCorte = false;
                     }
+                },
+
+                get diferenciaConciliacionCorte() {
+                    if (!this.datosEstadoCuenta || this.conciliacionSaldoBanco === '' || this.conciliacionSaldoBanco === null) return 0;
+                    const saldoCalc = parseFloat(this.datosEstadoCuenta.resumen?.saldo_final_corte) || 0;
+                    const saldoPdf = parseFloat(this.conciliacionSaldoBanco) || 0;
+                    return Number((saldoCalc - saldoPdf).toFixed(2));
+                },
+
+                async guardarConciliacionCorte(nuevoCerrado) {
+                    if (!this.datosEstadoCuenta) return;
+                    const cerradoFinal = (nuevoCerrado === null || nuevoCerrado === undefined)
+                        ? Boolean(this.datosEstadoCuenta.cierre_mes?.cerrado)
+                        : Boolean(nuevoCerrado);
+
+                    if (nuevoCerrado === true) {
+                        if (!(await this.pedirConfirmacionLateral(`¿Deseas CERRAR Y BLOQUEAR contablemente ${this.datosEstadoCuenta.periodo.nombre_mes} ${this.datosEstadoCuenta.periodo.anio}?\n\nMientras esté cerrado no se podrán agregar, editar ni eliminar movimientos de ese mes.`, 'Cerrar Mes Contable'))) {
+                            return;
+                        }
+                    }
+
+                    const payload = {
+                        cuenta_id: Number(this.corteCuentaId),
+                        anio: Number(this.corteAnio),
+                        mes: Number(this.corteMes),
+                        saldo_banco_pdf: (this.conciliacionSaldoBanco !== '' && this.conciliacionSaldoBanco !== null) ? parseFloat(this.conciliacionSaldoBanco) : null,
+                        cerrado: cerradoFinal,
+                        usuario: this.usuarioActual ? this.usuarioActual.username : 'admin'
+                    };
+                    const res = await fetch('/api/reportes/corte-mes/conciliacion', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        this.datosEstadoCuenta.cierre_mes = data;
+                        if (nuevoCerrado !== null && nuevoCerrado !== undefined) {
+                            alert(cerradoFinal ? '🔒 Mes cerrado y bloqueado contablemente.' : '🔓 Mes reabierto para ediciones.');
+                        } else {
+                            alert('✅ Saldo de conciliación guardado.');
+                        }
+                    }
+                },
+
+                exportarCSV(nombreArchivo, encabezados, filas) {
+                    const escapar = (val) => {
+                        const s = String(val === null || val === undefined ? '' : val).replace(/"/g, '""');
+                        return `"${s}"`;
+                    };
+                    const lineas = [
+                        encabezados.map(escapar).join(','),
+                        ...filas.map(f => f.map(escapar).join(','))
+                    ];
+                    const contenido = '\uFEFF' + lineas.join('\r\n');
+                    const blob = new Blob([contenido], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = nombreArchivo;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                },
+
+                exportarExcelReporte() {
+                    const cta = this.cuentaActivaReporte;
+                    const nombreCta = cta ? `${cta.banco}_${cta.nombre}`.replace(/\s+/g, '_') : 'Cuenta';
+                    const encabezados = ['Fecha', 'Banco', 'Empresa', 'No. Cuenta', 'Tipo', 'Concepto', 'Referencia', 'Categoria', 'Cliente / Proveedor', 'Estatus CFDI', 'Cargo (-)', 'Abono (+)', 'Saldo Corrido', 'Registrado Por'];
+                    const filas = this.transaccionesMostradas.map(t => [
+                        t.fecha,
+                        t.cuenta_banco || '',
+                        t.cuenta_nombre || '',
+                        t.numero_cuenta || '',
+                        t.tipo,
+                        t.concepto || '',
+                        t.referencia || '',
+                        t.categoria_nombre || 'Sin Asignar',
+                        t.entidad_nombre || '',
+                        t.estatus_factura || 'PENDIENTE',
+                        t.tipo === 'SALIDA' ? Number(t.monto).toFixed(2) : '',
+                        t.tipo === 'ENTRADA' ? Number(t.monto).toFixed(2) : '',
+                        t.saldo_corrido !== undefined ? Number(t.saldo_corrido).toFixed(2) : '',
+                        t.usuario_registro || 'admin'
+                    ]);
+                    this.exportarCSV(`Reporte_${nombreCta}_${new Date().toISOString().slice(0, 10)}.csv`, encabezados, filas);
+                },
+
+                exportarExcelCorteMes() {
+                    if (!this.datosEstadoCuenta) return;
+                    const cta = this.datosEstadoCuenta.cuenta;
+                    const per = this.datosEstadoCuenta.periodo;
+                    const encabezados = ['Fecha', 'Concepto', 'Referencia', 'Categoria', 'Beneficiario / Empresa', 'Retiros / Cargos (-)', 'Depositos / Abonos (+)', 'Saldo Corrido'];
+                    const filas = (this.datosEstadoCuenta.movimientos || []).map(m => [
+                        m.fecha,
+                        m.concepto || '',
+                        m.referencia || '',
+                        m.categoria || '',
+                        m.entidad || '',
+                        m.cargo ? Number(m.cargo).toFixed(2) : '',
+                        m.abono ? Number(m.abono).toFixed(2) : '',
+                        Number(m.saldo_corrido || 0).toFixed(2)
+                    ]);
+                    this.exportarCSV(`Corte_${cta.banco}_${per.nombre_mes}_${per.anio}.csv`, encabezados, filas);
+                },
+
+                exportarExcelConcentradoBancos() {
+                    const encabezados = ['Empresa', 'RFC', 'Banco', 'Numero de Cuenta', 'CLABE', 'Moneda', 'Saldo Inicial', 'Total Entradas (+)', 'Total Salidas (-)', 'Saldo Contable Disponible'];
+                    const filas = (this.cuentasPermitidas || []).map(c => [
+                        c.nombre || '',
+                        c.rfc_empresa || '',
+                        c.banco || '',
+                        c.numero_cuenta || '',
+                        c.clabe || '',
+                        c.moneda || 'MXN',
+                        Number(c.saldo_inicial || 0).toFixed(2),
+                        Number(c.total_entradas || 0).toFixed(2),
+                        Number(c.total_salidas || 0).toFixed(2),
+                        Number(c.saldo_actual || 0).toFixed(2)
+                    ]);
+                    filas.push(['GRAN TOTAL DISPONIBLE', '', '', '', '', 'MXN', '', Number(this.granTotalEntradasBancos).toFixed(2), Number(this.granTotalSalidasBancos).toFixed(2), Number(this.granTotalDisponibleBancos).toFixed(2)]);
+                    this.exportarCSV(`Concentrado_Bancos_${new Date().toISOString().slice(0, 10)}.csv`, encabezados, filas);
                 },
 
                 imprimirEstadoCuenta() {
