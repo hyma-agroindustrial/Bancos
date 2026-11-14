@@ -534,7 +534,7 @@ def listar_transacciones(
     tipo: Optional[str] = None,
     fecha_inicio: Optional[date] = None,
     fecha_fin: Optional[date] = None,
-    limit: int = 150,
+    limit: int = 2000,
     db: Session = Depends(get_db)
 ):
     query = db.query(Transaccion)
@@ -756,6 +756,9 @@ def confirmar_importacion_lote(payload: BatchImportConfirm, db: Session = Depend
 @app.get("/api/reportes/resumen")
 def reporte_financiero_global(
     cuenta_id: Optional[int] = None,
+    categoria_id: Optional[int] = None,
+    entidad_id: Optional[int] = None,
+    tipo: Optional[str] = None,
     fecha_inicio: Optional[date] = None,
     fecha_fin: Optional[date] = None,
     db: Session = Depends(get_db)
@@ -763,6 +766,12 @@ def reporte_financiero_global(
     query = db.query(Transaccion)
     if cuenta_id:
         query = query.filter(Transaccion.cuenta_id == cuenta_id)
+    if categoria_id:
+        query = query.filter(Transaccion.categoria_id == categoria_id)
+    if entidad_id:
+        query = query.filter(Transaccion.entidad_id == entidad_id)
+    if tipo:
+        query = query.filter(Transaccion.tipo == tipo)
     if fecha_inicio:
         query = query.filter(Transaccion.fecha >= fecha_inicio)
     if fecha_fin:

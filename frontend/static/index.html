@@ -50,6 +50,7 @@
     </script>
     <style>
         [x-cloak] { display: none !important; }
+        .print-only { display: none !important; }
 
         @page {
             size: portrait;
@@ -57,6 +58,7 @@
         }
 
         @media print {
+            .print-only { display: block !important; }
             body {
                 background: #ffffff !important;
                 color: #0f172a !important;
@@ -893,98 +895,193 @@
             </div>
 
             <!-- TAB 3: REPORTES Y LISTA DE MOVIMIENTOS -->
-            <div x-show="activeTab === 'reportes'" class="p-4 sm:p-6 space-y-5">
-                <!-- BARRA DE FILTROS -->
-                <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
-                    <div>
-                        <label class="block text-[11px] font-semibold text-slate-400 mb-1">Cuenta</label>
-                        <select x-model="filtros.cuenta_id" @change="filtrarTransacciones" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
-                            <option value="">Todas las cuentas</option>
-                            <template x-for="cta in cuentasPermitidas" :key="cta.id">
-                                <option :value="cta.id" x-text="formatCuentaLabel(cta)"></option>
-                            </template>
-                        </select>
+            <div x-show="activeTab === 'reportes'" class="p-4 sm:p-6 space-y-5 print-document">
+                <!-- BARRA DE FILTROS Y ACCIÓN DE IMPRESIÓN (NO PRINT) -->
+                <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 space-y-3 no-print">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-400 mb-1">Cuenta</label>
+                            <select x-model="filtros.cuenta_id" @change="filtrarTransacciones" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
+                                <option value="">Todas las cuentas</option>
+                                <template x-for="cta in cuentasPermitidas" :key="cta.id">
+                                    <option :value="cta.id" x-text="formatCuentaLabel(cta)"></option>
+                                </template>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-400 mb-1">Categoría</label>
+                            <select x-model="filtros.categoria_id" @change="filtrarTransacciones" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
+                                <option value="">Todas las categorías</option>
+                                <template x-for="cat in categorias" :key="cat.id">
+                                    <option :value="cat.id" x-text="cat.nombre"></option>
+                                </template>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-400 mb-1">Cliente / Proveedor</label>
+                            <select x-model="filtros.entidad_id" @change="filtrarTransacciones" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
+                                <option value="">Todos</option>
+                                <template x-for="ent in entidades" :key="ent.id">
+                                    <option :value="ent.id" x-text="ent.nombre"></option>
+                                </template>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-400 mb-1">Fecha Desde</label>
+                            <input type="date" x-model="filtros.fecha_inicio" @change="filtrarTransacciones" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white">
+                        </div>
+
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-400 mb-1">Fecha Hasta</label>
+                            <input type="date" x-model="filtros.fecha_fin" @change="filtrarTransacciones" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white">
+                        </div>
                     </div>
 
-                    <div>
-                        <label class="block text-[11px] font-semibold text-slate-400 mb-1">Categoría</label>
-                        <select x-model="filtros.categoria_id" @change="filtrarTransacciones" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
-                            <option value="">Todas las categorías</option>
-                            <template x-for="cat in categorias" :key="cat.id">
-                                <option :value="cat.id" x-text="cat.nombre"></option>
-                            </template>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label class="block text-[11px] font-semibold text-slate-400 mb-1">Cliente / Proveedor</label>
-                        <select x-model="filtros.entidad_id" @change="filtrarTransacciones" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
-                            <option value="">Todos</option>
-                            <template x-for="ent in entidades" :key="ent.id">
-                                <option :value="ent.id" x-text="ent.nombre"></option>
-                            </template>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label class="block text-[11px] font-semibold text-slate-400 mb-1">Fecha Desde</label>
-                        <input type="date" x-model="filtros.fecha_inicio" @change="filtrarTransacciones" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white">
-                    </div>
-
-                    <div>
-                        <label class="block text-[11px] font-semibold text-slate-400 mb-1">Fecha Hasta</label>
-                        <input type="date" x-model="filtros.fecha_fin" @change="filtrarTransacciones" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white">
+                    <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/80">
+                        <div class="text-[11px] text-slate-400">
+                            Mostrando <span class="font-bold text-white" x-text="transacciones.length"></span> movimiento(s) con los filtros seleccionados.
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button @click="limpiarFiltrosReporte()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-semibold text-xs px-3 py-1.5 rounded-lg transition flex items-center gap-1">
+                                <span>🔄</span> <span>Limpiar Filtros</span>
+                            </button>
+                            <button @click="imprimirReporteMovimientos()" :disabled="transacciones.length === 0" class="bg-emerald-600 disabled:opacity-40 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-1.5 rounded-lg transition flex items-center gap-1.5 shadow-md">
+                                <span>🖨️</span> <span>Imprimir / Exportar Reporte PDF</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
-                <!-- RESUMEN DE SALDOS DEL REPORTE -->
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <!-- ENCABEZADO CORPORATIVO OFICIAL PARA IMPRESIÓN PDF (PRINT ONLY) -->
+                <div class="print-only border-b-2 border-slate-700 pb-4 mb-4">
+                    <div class="flex justify-between items-start gap-4">
+                        <!-- Lado Izquierdo: Logo y Datos Fiscales de la Empresa -->
+                        <div class="flex items-center gap-3.5">
+                            <div class="w-16 h-16 rounded-xl border border-slate-300 p-1.5 flex items-center justify-center shrink-0 overflow-hidden print-card">
+                                <template x-if="cuentaActivaReporte && cuentaActivaReporte.logo_empresa">
+                                    <img :src="cuentaActivaReporte.logo_empresa" alt="Empresa" class="w-full h-full object-contain">
+                                </template>
+                                <template x-if="(!cuentaActivaReporte || !cuentaActivaReporte.logo_empresa) && config.logo_url">
+                                    <img :src="config.logo_url" alt="Empresa" class="w-full h-full object-contain">
+                                </template>
+                                <template x-if="(!cuentaActivaReporte || !cuentaActivaReporte.logo_empresa) && !config.logo_url && cuentasPermitidas.length > 0 && cuentasPermitidas[0].logo_empresa">
+                                    <img :src="cuentasPermitidas[0].logo_empresa" alt="Empresa" class="w-full h-full object-contain">
+                                </template>
+                                <template x-if="(!cuentaActivaReporte || !cuentaActivaReporte.logo_empresa) && !config.logo_url && (!cuentasPermitidas.length || !cuentasPermitidas[0].logo_empresa)">
+                                    <div class="w-full h-full flex items-center justify-center font-black text-xl print-dark-text">🏢</div>
+                                </template>
+                            </div>
+                            <div>
+                                <h2 class="text-lg font-black uppercase tracking-wide print-dark-text" x-text="cuentaActivaReporte ? cuentaActivaReporte.nombre : (cuentasPermitidas.length === 1 ? cuentasPermitidas[0].nombre : (config.nombre_sistema || 'HYMA AGROINDUSTRIAL'))"></h2>
+                                <p class="text-xs print-muted-text" x-text="config.descripcion_sistema || 'Sistema de Control de Gastos & Cuentas Fiscales'"></p>
+                                <p class="text-xs font-mono font-bold print-dark-text mt-0.5" x-text="'RFC: ' + (cuentaActivaReporte && cuentaActivaReporte.rfc_empresa ? cuentaActivaReporte.rfc_empresa : (cuentasPermitidas.length > 0 && cuentasPermitidas[0].rfc_empresa ? cuentasPermitidas[0].rfc_empresa : 'HAG161013U20'))"></p>
+                            </div>
+                        </div>
+
+                        <!-- Centro: Título del Reporte -->
+                        <div class="text-center">
+                            <span class="inline-block px-3 py-1 rounded-full text-[10px] font-black tracking-wider uppercase print-card mb-1">
+                                REPORTE EJECUTIVO DE MOVIMIENTOS & GASTOS
+                            </span>
+                            <div class="text-xs font-mono font-bold print-dark-text" x-text="'Periodo: ' + (filtros.fecha_inicio ? filtros.fecha_inicio : 'Inicio histórico') + ' al ' + (filtros.fecha_fin ? filtros.fecha_fin : 'Fecha actual')"></div>
+                            <div class="text-[10px] font-mono print-muted-text" x-text="'Fecha de emisión: ' + new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })"></div>
+                        </div>
+
+                        <!-- Lado Derecho: Institución Bancaria (si hay cuenta seleccionada) -->
+                        <div class="text-right" x-show="cuentaActivaReporte">
+                            <span class="text-[10px] uppercase font-bold print-muted-text block">Institución Bancaria</span>
+                            <span class="font-black text-sm print-dark-text" x-text="cuentaActivaReporte ? cuentaActivaReporte.banco : ''"></span>
+                            <div class="text-[10px] font-mono print-dark-text" x-text="cuentaActivaReporte ? ('Cta: ' + cuentaActivaReporte.numero_cuenta) : ''"></div>
+                            <div class="text-[10px] font-mono print-muted-text" x-text="cuentaActivaReporte ? ('CLABE: ' + cuentaActivaReporte.clabe) : ''"></div>
+                        </div>
+                    </div>
+
+                    <!-- Barra de Criterios Aplicados en el PDF -->
+                    <div class="grid grid-cols-4 gap-2 mt-3 p-2.5 rounded-lg print-card text-[10px]">
+                        <div>
+                            <span class="font-bold uppercase print-muted-text block">Cuenta Bancaria:</span>
+                            <span class="font-semibold print-dark-text" x-text="cuentaActivaReporte ? (cuentaActivaReporte.banco + ' · ' + cuentaActivaReporte.nombre + ' (' + cuentaActivaReporte.numero_cuenta + ')') : 'Todas las cuentas'"></span>
+                        </div>
+                        <div>
+                            <span class="font-bold uppercase print-muted-text block">Categoría Fiscal:</span>
+                            <span class="font-semibold print-dark-text" x-text="nombreCategoriaFiltroReporte"></span>
+                        </div>
+                        <div>
+                            <span class="font-bold uppercase print-muted-text block">Cliente / Proveedor:</span>
+                            <span class="font-semibold print-dark-text" x-text="nombreEntidadFiltroReporte"></span>
+                        </div>
+                        <div>
+                            <span class="font-bold uppercase print-muted-text block">Total Registros:</span>
+                            <span class="font-semibold font-mono print-dark-text" x-text="transacciones.length + ' movimiento(s)'"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RESUMEN DE SALDOS DEL REPORTE (SOLO PANTALLA - FILTRADO EXACTO) -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 no-print">
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
-                        <p class="text-[11px] text-slate-400 font-semibold">Total Entradas</p>
+                        <div class="flex justify-between items-center">
+                            <p class="text-[11px] text-slate-400 font-semibold">Total Entradas (en este reporte)</p>
+                            <span class="text-[10px] font-mono text-slate-500" x-text="transacciones.filter(t => t.tipo === 'ENTRADA').length + ' abono(s)'"></span>
+                        </div>
                         <p class="text-lg font-bold text-emerald-400 font-mono mt-0.5" x-text="formatMoney(resumenReporte.total_entradas)"></p>
                     </div>
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
-                        <p class="text-[11px] text-slate-400 font-semibold">Total Salidas</p>
+                        <div class="flex justify-between items-center">
+                            <p class="text-[11px] text-slate-400 font-semibold">Total Salidas / Gastos (en este reporte)</p>
+                            <span class="text-[10px] font-mono text-slate-500" x-text="transacciones.filter(t => t.tipo === 'SALIDA').length + ' cargo(s)'"></span>
+                        </div>
                         <p class="text-lg font-bold text-rose-400 font-mono mt-0.5" x-text="formatMoney(resumenReporte.total_salidas)"></p>
                     </div>
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
-                        <p class="text-[11px] text-slate-400 font-semibold">Balance del Periodo</p>
-                        <p class="text-lg font-bold font-mono mt-0.5" :class="resumenReporte.balance_periodo >= 0 ? 'text-emerald-400' : 'text-rose-400'" x-text="formatMoney(resumenReporte.balance_periodo)"></p>
+                        <div class="flex justify-between items-center">
+                            <p class="text-[11px] text-slate-400 font-semibold" x-text="resumenReporte.total_entradas === 0 && resumenReporte.total_salidas > 0 ? 'Suma Total de Gastos del Reporte' : (resumenReporte.total_salidas === 0 && resumenReporte.total_entradas > 0 ? 'Suma Total de Ingresos del Reporte' : 'Diferencia Neta del Reporte (Entradas - Salidas)')"></p>
+                            <span class="text-[10px] font-mono text-slate-500" x-text="transacciones.length + ' mov(s)'"></span>
+                        </div>
+                        <p class="text-lg font-bold font-mono mt-0.5"
+                           :class="resumenReporte.total_entradas === 0 && resumenReporte.total_salidas > 0 ? 'text-rose-400' : (resumenReporte.balance_periodo >= 0 ? 'text-emerald-400' : 'text-rose-400')"
+                           x-text="resumenReporte.total_entradas === 0 && resumenReporte.total_salidas > 0 ? formatMoney(resumenReporte.total_salidas) : formatMoney(resumenReporte.balance_periodo)"></p>
                     </div>
                 </div>
 
                 <!-- TABLA HISTORIAL DE MOVIMIENTOS -->
-                <div class="overflow-x-auto border border-slate-800 rounded-xl">
-                    <table class="w-full text-left text-xs text-slate-300">
+                <div class="overflow-x-auto border border-slate-800 rounded-xl print-card">
+                    <table class="w-full text-left text-xs text-slate-300 print-table">
                         <thead class="bg-slate-900 text-slate-400 uppercase font-semibold text-[10px]">
                             <tr>
-                                <th class="p-3">Fecha</th>
-                                <th class="p-3">Cuenta</th>
-                                <th class="p-3">Concepto</th>
-                                <th class="p-3">Categoría</th>
-                                <th class="p-3">Cliente / Proveedor</th>
-                                <th class="p-3 text-right">Monto</th>
-                                <th class="p-3 text-center">Acciones</th>
+                                <th class="p-3" style="width: 11%;">Fecha</th>
+                                <th class="p-3" style="width: 21%;">Cuenta</th>
+                                <th class="p-3" style="width: 28%;">Concepto</th>
+                                <th class="p-3" style="width: 15%;">Categoría</th>
+                                <th class="p-3" style="width: 13%;">Cliente / Proveedor</th>
+                                <th class="p-3 text-right" style="width: 12%;">Monto</th>
+                                <th class="p-3 text-center no-print">Acciones</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-800/80">
                             <template x-for="t in transacciones" :key="t.id">
                                 <tr class="hover:bg-slate-900/50">
-                                    <td class="p-3 font-mono text-slate-400" x-text="t.fecha"></td>
+                                    <td class="p-3 font-mono text-slate-400 print-dark-text whitespace-nowrap" x-text="t.fecha"></td>
                                     <td class="p-3">
-                                        <div class="font-bold text-white flex items-center gap-1.5">
-                                            <span class="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-400 border border-emerald-800/80" x-text="t.cuenta_banco || 'BANCO'"></span>
+                                        <div class="font-bold text-white print-dark-text flex items-center gap-1.5 flex-wrap">
+                                            <span class="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-400 border border-emerald-800/80 print-card" x-text="t.cuenta_banco || 'BANCO'"></span>
                                             <span x-text="t.cuenta_nombre"></span>
                                         </div>
-                                        <div class="text-[10px] font-mono text-slate-400" x-text="'No. ' + (t.cuenta_numero || '****')"></div>
+                                        <div class="text-[10px] font-mono text-slate-400 print-muted-text" x-text="'No. ' + (t.cuenta_numero || '****')"></div>
                                     </td>
-                                    <td class="p-3 font-medium text-white max-w-sm truncate" x-text="t.concepto"></td>
+                                    <td class="p-3 font-medium text-white print-dark-text max-w-sm break-words">
+                                        <div x-text="t.concepto"></div>
+                                        <div x-show="t.referencia" class="text-[10px] font-mono text-slate-400 print-muted-text" x-text="'Ref: ' + t.referencia"></div>
+                                    </td>
                                     <td class="p-3">
-                                        <span class="px-2 py-0.5 rounded text-[11px] bg-slate-800 text-slate-300 border border-slate-700" x-text="t.categoria_nombre || 'Sin Asignar'"></span>
+                                        <span class="px-2 py-0.5 rounded text-[11px] bg-slate-800 text-slate-300 border border-slate-700 print-card inline-block" x-text="t.categoria_nombre || 'Sin Asignar'"></span>
                                     </td>
-                                    <td class="p-3 text-emerald-400 font-medium" x-text="t.entidad_nombre || '-'"></td>
-                                    <td class="p-3 text-right font-mono font-bold" :class="t.tipo === 'ENTRADA' ? 'text-emerald-400' : 'text-rose-400'" x-text="(t.tipo === 'ENTRADA' ? '+' : '-') + ' ' + formatMoney(t.monto)"></td>
-                                    <td class="p-3 text-center">
+                                    <td class="p-3 text-emerald-400 print-dark-text font-medium" x-text="t.entidad_nombre || '-'"></td>
+                                    <td class="p-3 text-right font-mono font-bold whitespace-nowrap" :class="t.tipo === 'ENTRADA' ? 'text-emerald-400 print-badge-abono' : 'text-rose-400 print-badge-cargo'" x-text="(t.tipo === 'ENTRADA' ? '+' : '-') + ' ' + formatMoney(t.monto)"></td>
+                                    <td class="p-3 text-center no-print">
                                         <div class="flex items-center justify-center space-x-1.5">
                                             <button @click="abrirModalEditarTransaccion(t)" title="Modificar Movimiento" class="p-1.5 text-slate-400 hover:text-white bg-slate-900 hover:bg-slate-700 rounded-lg text-xs transition">
                                                 ✏️
@@ -1000,7 +1097,48 @@
                                 <td colspan="7" class="p-6 text-center text-slate-500">No se encontraron movimientos con los filtros aplicados.</td>
                             </tr>
                         </tbody>
+                        <!-- FILA DE CONTEO Y SUMA FINAL AL PIE DEL REPORTE -->
+                        <tfoot x-show="transacciones.length > 0" class="bg-slate-900/95 border-t-2 border-slate-700 font-bold">
+                            <!-- Si el reporte tiene gastos/salidas, muestra la suma total de los gastos hechos en este reporte -->
+                            <tr x-show="resumenReporte.total_salidas > 0">
+                                <td colspan="5" class="p-3 text-right uppercase tracking-wider text-xs text-slate-300 print-dark-text">
+                                    TOTAL DE GASTOS REALIZADOS EN ESTE REPORTE (<span x-text="transacciones.filter(t => t.tipo === 'SALIDA').length"></span> movimiento<span x-show="transacciones.filter(t => t.tipo === 'SALIDA').length !== 1">s</span>):
+                                </td>
+                                <td class="p-3 text-right font-mono text-sm font-black text-rose-400 print-badge-cargo whitespace-nowrap" x-text="'- ' + formatMoney(resumenReporte.total_salidas)"></td>
+                                <td class="no-print"></td>
+                            </tr>
+                            <!-- Si el reporte es exclusivamente de entradas/abonos, muestra la suma de entradas -->
+                            <tr x-show="resumenReporte.total_salidas === 0 && resumenReporte.total_entradas > 0">
+                                <td colspan="5" class="p-3 text-right uppercase tracking-wider text-xs text-slate-300 print-dark-text">
+                                    TOTAL DE INGRESOS / ENTRADAS EN ESTE REPORTE (<span x-text="transacciones.filter(t => t.tipo === 'ENTRADA').length"></span> movimiento<span x-show="transacciones.filter(t => t.tipo === 'ENTRADA').length !== 1">s</span>):
+                                </td>
+                                <td class="p-3 text-right font-mono text-sm font-black text-emerald-400 print-badge-abono whitespace-nowrap" x-text="'+ ' + formatMoney(resumenReporte.total_entradas)"></td>
+                                <td class="no-print"></td>
+                            </tr>
+                        </tfoot>
                     </table>
+                </div>
+
+                <!-- RECUADRO EJECUTIVO DE SUMA FINAL AL PIE (PARA REPORTE Y PDF) -->
+                <div x-show="transacciones.length > 0" class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-900/80 border border-slate-800 rounded-xl p-4 print-card">
+                    <div class="text-xs text-slate-400 print-muted-text">
+                        <span class="font-bold text-white print-dark-text">Resumen del Conteo Final:</span>
+                        Se contabilizaron <span class="font-mono font-bold text-white print-dark-text" x-text="transacciones.length"></span> registro(s) que cumplen con los filtros del reporte.
+                    </div>
+                    <div class="flex items-center gap-4 self-end sm:self-auto">
+                        <template x-if="resumenReporte.total_salidas > 0">
+                            <div class="text-right">
+                                <span class="text-[10px] uppercase font-bold text-slate-400 print-muted-text block">Suma Total de Gastos del Reporte</span>
+                                <span class="text-xl font-black font-mono text-rose-400 print-badge-cargo" x-text="formatMoney(resumenReporte.total_salidas)"></span>
+                            </div>
+                        </template>
+                        <template x-if="resumenReporte.total_salidas === 0 && resumenReporte.total_entradas > 0">
+                            <div class="text-right">
+                                <span class="text-[10px] uppercase font-bold text-slate-400 print-muted-text block">Suma Total de Ingresos del Reporte</span>
+                                <span class="text-xl font-black font-mono text-emerald-400 print-badge-abono" x-text="formatMoney(resumenReporte.total_entradas)"></span>
+                            </div>
+                        </template>
+                    </div>
                 </div>
             </div>
 
@@ -3152,6 +3290,47 @@
                     }
                 },
 
+                get cuentaActivaReporte() {
+                    if (this.filtros.cuenta_id) {
+                        return this.cuentas.find(c => String(c.id) === String(this.filtros.cuenta_id)) || null;
+                    }
+                    // Si todas las transacciones del reporte pertenecen a una misma cuenta, usar esa cuenta para el encabezado del PDF
+                    if (this.transacciones && this.transacciones.length > 0) {
+                        const firstId = this.transacciones[0].cuenta_id;
+                        if (this.transacciones.every(t => t.cuenta_id === firstId)) {
+                            return this.cuentas.find(c => Number(c.id) === Number(firstId)) || null;
+                        }
+                    }
+                    return null;
+                },
+
+                get nombreCategoriaFiltroReporte() {
+                    if (!this.filtros.categoria_id) return 'Todas las categorías';
+                    const cat = this.categorias.find(c => String(c.id) === String(this.filtros.categoria_id));
+                    return cat ? cat.nombre : 'Todas las categorías';
+                },
+
+                get nombreEntidadFiltroReporte() {
+                    if (!this.filtros.entidad_id) return 'Todos';
+                    const ent = this.entidades.find(e => String(e.id) === String(this.filtros.entidad_id));
+                    return ent ? ent.nombre : 'Todos';
+                },
+
+                limpiarFiltrosReporte() {
+                    this.filtros = {
+                        cuenta_id: '',
+                        categoria_id: '',
+                        entidad_id: '',
+                        fecha_inicio: '',
+                        fecha_fin: ''
+                    };
+                    this.filtrarTransacciones();
+                },
+
+                imprimirReporteMovimientos() {
+                    window.print();
+                },
+
                 async filtrarTransacciones() {
                     const params = new URLSearchParams();
                     if (this.filtros.cuenta_id) params.append('cuenta_id', this.filtros.cuenta_id);
@@ -3160,10 +3339,7 @@
                     if (this.filtros.fecha_inicio) params.append('fecha_inicio', this.filtros.fecha_inicio);
                     if (this.filtros.fecha_fin) params.append('fecha_fin', this.filtros.fecha_fin);
 
-                    const [resTr, resRep] = await Promise.all([
-                        fetch(`/api/transacciones?${params.toString()}`),
-                        fetch(`/api/reportes/resumen?${params.toString()}`)
-                    ]);
+                    const resTr = await fetch(`/api/transacciones?${params.toString()}`);
 
                     if (resTr.ok) {
                         let todas = await resTr.json();
@@ -3173,18 +3349,20 @@
                         }
                         this.transacciones = todas;
 
-                        if (!this.filtros.cuenta_id && this.usuarioActual && this.usuarioActual.rol !== 'ADMIN') {
-                            const ent = todas.filter(t => t.tipo === 'ENTRADA').reduce((s, t) => s + parseFloat(t.monto), 0);
-                            const sal = todas.filter(t => t.tipo === 'SALIDA').reduce((s, t) => s + parseFloat(t.monto), 0);
-                            this.resumenReporte = {
-                                total_entradas: ent,
-                                total_salidas: sal,
-                                balance_periodo: ent - sal
-                            };
-                            return;
-                        }
+                        // Calcular el resumen exactamente sobre los movimientos filtrados de este reporte
+                        const ent = todas
+                            .filter(t => t.tipo === 'ENTRADA')
+                            .reduce((s, t) => s + (parseFloat(t.monto) || 0), 0);
+                        const sal = todas
+                            .filter(t => t.tipo === 'SALIDA')
+                            .reduce((s, t) => s + (parseFloat(t.monto) || 0), 0);
+
+                        this.resumenReporte = {
+                            total_entradas: ent,
+                            total_salidas: sal,
+                            balance_periodo: ent - sal
+                        };
                     }
-                    if (resRep.ok) this.resumenReporte = await resRep.json();
                 },
 
                 abrirModalEditarTransaccion(t) {
