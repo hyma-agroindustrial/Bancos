@@ -903,6 +903,30 @@
                     <p class="text-[10px] text-slate-500 mt-1">Si lo dejas vacío, se mostrará el icono institucional predeterminado.</p>
                 </div>
 
+                <!-- Configuración de Tamaño de Ventanas y Modales -->
+                <div class="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-2">
+                    <label class="block text-xs font-semibold text-emerald-400">📐 Tamaño de Ventanas de Captura y Ajustes</label>
+                    <p class="text-[10px] text-slate-400">Elige el tamaño predeterminado con el que se abrirán las ventanas:</p>
+                    <div class="grid grid-cols-3 gap-2 pt-1">
+                        <button type="button" @click="setTamanioModal('pequeno')" :class="tamanioModal === 'pequeno' ? 'bg-emerald-600 text-white font-bold border-emerald-500 shadow' : 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800'" class="p-2 text-xs rounded-xl border transition text-center">
+                            <div class="text-base">📱</div>
+                            <div class="text-[11px] font-bold">Pequeño</div>
+                            <div class="text-[9px] text-slate-400">Compacto</div>
+                        </button>
+                        <button type="button" @click="setTamanioModal('normal')" :class="tamanioModal === 'normal' ? 'bg-emerald-600 text-white font-bold border-emerald-500 shadow' : 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800'" class="p-2 text-xs rounded-xl border transition text-center">
+                            <div class="text-base">💻</div>
+                            <div class="text-[11px] font-bold">Normal</div>
+                            <div class="text-[9px] text-slate-400">Equilibrado</div>
+                        </button>
+                        <button type="button" @click="setTamanioModal('grande')" :class="tamanioModal === 'grande' ? 'bg-emerald-600 text-white font-bold border-emerald-500 shadow' : 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800'" class="p-2 text-xs rounded-xl border transition text-center">
+                            <div class="text-base">🖥️</div>
+                            <div class="text-[11px] font-bold">Grande</div>
+                            <div class="text-[9px] text-slate-400">Amplio</div>
+                        </button>
+                    </div>
+                    <div class="text-[10px] text-slate-500 mt-1">📱 En teléfonos celulares se autoadapta siempre al 100% de la pantalla para máxima comodidad táctil.</div>
+                </div>
+
                 <div class="flex justify-end space-x-2 pt-3 border-t border-slate-800">
                     <button type="button" @click="openModalConfiguracion = false" class="px-4 py-2 text-xs text-slate-400 hover:text-white">Cancelar</button>
                     <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-xl">Guardar Cambios</button>
@@ -953,130 +977,170 @@
     </div>
 
     <!-- MODAL: AGREGAR O MODIFICAR CUENTA BANCARIA -->
-    <div x-show="openModalCuenta" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" x-cloak>
-        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-6 shadow-2xl overflow-y-auto max-h-[90vh]" @click.away="openModalCuenta = false">
-            <h3 class="text-base font-bold text-white mb-1" x-text="cuentaEnEdicion ? '✏️ Modificar Cuenta Bancaria' : '🏦 Registrar Nueva Cuenta Bancaria'"></h3>
-            <p class="text-xs text-slate-400 mb-4">Configura los datos fiscales de la empresa, institución bancaria y logotipos distintivos.</p>
+    <div x-show="openModalCuenta" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-sm" x-cloak>
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl w-full p-4 sm:p-7 shadow-2xl overflow-y-auto max-h-[92vh] transition-all duration-300"
+             :class="{
+                 'max-w-lg': tamanioModal === 'pequeno',
+                 'max-w-2xl': tamanioModal === 'normal',
+                 'max-w-4xl': tamanioModal === 'grande'
+             }"
+             @click.away="openModalCuenta = false">
+            
+            <!-- ENCABEZADO CON SELECTOR DE TAMAÑO (PEQUEÑO / NORMAL / GRANDE) -->
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3.5 border-b border-slate-800 mb-4">
+                <div>
+                    <h3 class="text-base sm:text-lg font-bold text-white flex items-center gap-2" x-text="cuentaEnEdicion ? '✏️ Modificar Cuenta Bancaria' : '🏦 Registrar Nueva Cuenta Bancaria'"></h3>
+                    <p class="text-xs text-slate-400">Configura los datos fiscales de la empresa, institución bancaria y logotipos distintivos.</p>
+                </div>
+
+                <!-- CONTROLES DE TAMAÑO DE VENTANA (AUTOADAPTATIVO) -->
+                <div class="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 self-end sm:self-auto shadow-inner">
+                    <span class="text-[10px] text-slate-400 font-bold px-1.5 hidden md:inline">Ventana:</span>
+                    <button type="button" @click="setTamanioModal('pequeno')" :class="tamanioModal === 'pequeno' ? 'bg-emerald-600 text-white font-bold shadow' : 'text-slate-400 hover:text-white'" class="px-2.5 py-1 text-[11px] rounded-lg transition" title="Tamaño Pequeño / Compacto">
+                        📱 Pequeño
+                    </button>
+                    <button type="button" @click="setTamanioModal('normal')" :class="tamanioModal === 'normal' ? 'bg-emerald-600 text-white font-bold shadow' : 'text-slate-400 hover:text-white'" class="px-2.5 py-1 text-[11px] rounded-lg transition" title="Tamaño Normal">
+                        💻 Normal
+                    </button>
+                    <button type="button" @click="setTamanioModal('grande')" :class="tamanioModal === 'grande' ? 'bg-emerald-600 text-white font-bold shadow' : 'text-slate-400 hover:text-white'" class="px-2.5 py-1 text-[11px] rounded-lg transition" title="Tamaño Grande / Amplio">
+                        🖥️ Grande
+                    </button>
+                </div>
+            </div>
 
             <form @submit.prevent="guardarCuenta" class="space-y-4">
                 
-                <!-- SECCIÓN 1: DATOS DE LA EMPRESA & LOGO -->
-                <div class="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-3">
-                    <span class="text-[11px] font-bold text-emerald-400 uppercase tracking-wider block">🏢 Empresa Titular de la Cuenta</span>
+                <!-- SECCIÓN 1 Y 2: EN TAMAÑO GRANDE SE MUESTRAN LADO A LADO EN 2 COLUMNAS CÓMODAS -->
+                <div class="grid grid-cols-1 gap-4" :class="{'md:grid-cols-2': tamanioModal === 'grande', 'grid-cols-1': tamanioModal !== 'grande'}">
                     
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-[11px] font-semibold text-slate-300 mb-1">Nombre / Razón Social *</label>
-                            <input type="text" x-model="cuentaForm.nombre" required placeholder="Ej. HYMA AGROINDUSTRIAL" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
-                        </div>
-                        <div>
-                            <label class="block text-[11px] font-semibold text-slate-300 mb-1">RFC de la Empresa</label>
-                            <input type="text" x-model="cuentaForm.rfc_empresa" maxlength="15" placeholder="Ej. HAG161013U20" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono uppercase">
-                        </div>
-                    </div>
-
-                    <!-- Logotipo de la Empresa -->
-                    <div>
-                        <label class="block text-[11px] font-semibold text-slate-300 mb-1">Logotipo de la Empresa</label>
-                        <div class="flex items-center gap-3">
-                            <div class="w-12 h-12 rounded-xl bg-slate-900 border border-slate-700 p-1 flex items-center justify-center shrink-0 overflow-hidden shadow-inner">
-                                <template x-if="cuentaForm.logo_empresa">
-                                    <img :src="cuentaForm.logo_empresa" class="w-full h-full object-contain">
-                                </template>
-                                <template x-if="!cuentaForm.logo_empresa && config.logo_url">
-                                    <img :src="config.logo_url" class="w-full h-full object-contain opacity-50">
-                                </template>
-                                <template x-if="!cuentaForm.logo_empresa && !config.logo_url">
-                                    <span class="text-xs text-slate-500 font-bold">Sin logo</span>
-                                </template>
+                    <!-- SECCIÓN 1: DATOS DE LA EMPRESA & LOGO -->
+                    <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3 flex flex-col justify-between">
+                        <div class="space-y-3">
+                            <span class="text-xs font-bold text-emerald-400 uppercase tracking-wider block">🏢 Empresa Titular de la Cuenta</span>
+                            
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-300 mb-1">Nombre / Razón Social *</label>
+                                    <input type="text" x-model="cuentaForm.nombre" required placeholder="Ej. HYMA AGROINDUSTRIAL" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:ring-2 focus:ring-emerald-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-300 mb-1">RFC de la Empresa</label>
+                                    <input type="text" x-model="cuentaForm.rfc_empresa" maxlength="15" placeholder="Ej. HAG161013U20" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono uppercase focus:ring-2 focus:ring-emerald-500">
+                                </div>
                             </div>
-                            <div class="flex-1 space-y-1">
-                                <input type="file" accept="image/*" @change="subirLogoEmpresa($event)" class="w-full text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-emerald-400 hover:file:bg-slate-700 cursor-pointer">
-                                <div class="text-[10px] text-slate-500">Formato PNG, JPG o WEBP. Si se deja vacío, usará el logo general.</div>
+
+                            <!-- Logotipo de la Empresa -->
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-300 mb-1">Logotipo de la Empresa</label>
+                                <div class="flex items-center gap-3">
+                                    <div class="w-12 h-12 rounded-xl bg-slate-900 border border-slate-700 p-1 flex items-center justify-center shrink-0 overflow-hidden shadow-inner">
+                                        <template x-if="cuentaForm.logo_empresa">
+                                            <img :src="cuentaForm.logo_empresa" class="w-full h-full object-contain">
+                                        </template>
+                                        <template x-if="!cuentaForm.logo_empresa && config.logo_url">
+                                            <img :src="config.logo_url" class="w-full h-full object-contain opacity-50">
+                                        </template>
+                                        <template x-if="!cuentaForm.logo_empresa && !config.logo_url">
+                                            <span class="text-xs text-slate-500 font-bold">Sin logo</span>
+                                        </template>
+                                    </div>
+                                    <div class="flex-1 space-y-1">
+                                        <input type="file" accept="image/*" @change="subirLogoEmpresa($event)" class="w-full text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-emerald-400 hover:file:bg-slate-700 cursor-pointer">
+                                        <div class="text-[10px] text-slate-500">Formato PNG, JPG o WEBP. Si se deja vacío, usará el logo general.</div>
+                                    </div>
+                                    <button type="button" x-show="cuentaForm.logo_empresa" @click="cuentaForm.logo_empresa = null" class="text-xs text-rose-400 hover:underline">Quitar</button>
+                                </div>
                             </div>
-                            <button type="button" x-show="cuentaForm.logo_empresa" @click="cuentaForm.logo_empresa = null" class="text-xs text-rose-400 hover:underline">Quitar</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- SECCIÓN 2: INSTITUCIÓN BANCARIA & LOGO -->
-                <div class="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-3">
-                    <span class="text-[11px] font-bold text-sky-400 uppercase tracking-wider block">🏛️ Institución Bancaria</span>
-                    
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-[11px] font-semibold text-slate-300 mb-1">Banco Oficial *</label>
-                            <input list="listaBancosModal" type="text" x-model="cuentaForm.banco" @change="seleccionarBancoPreset(cuentaForm.banco)" required placeholder="Ej. Banorte / Scotiabank / BBVA" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
-                            <datalist id="listaBancosModal">
-                                <option value="Banorte"></option>
-                                <option value="Scotiabank"></option>
-                                <option value="BBVA"></option>
-                                <option value="Santander"></option>
-                                <option value="Citibanamex"></option>
-                                <option value="HSBC"></option>
-                                <option value="Banco Azteca"></option>
-                                <option value="BanBajío"></option>
-                                <option value="Banregio"></option>
-                                <option value="Inbursa"></option>
-                                <option value="Afirme"></option>
-                            </datalist>
-                        </div>
-                        <div>
-                            <label class="block text-[11px] font-semibold text-slate-300 mb-1">Estilo / Preset de Logo</label>
-                            <select x-model="cuentaForm.logo_banco" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
-                                <option value="banorte">🔴 Banorte (Oficial)</option>
-                                <option value="scotiabank">🔴 Scotiabank (Oficial)</option>
-                                <option value="bbva">🔵 BBVA (Oficial)</option>
-                                <option value="santander">🔴 Santander (Oficial)</option>
-                                <option value="citibanamex">🔵 Citibanamex (Oficial)</option>
-                                <option value="hsbc">🔴 HSBC (Oficial)</option>
-                                <option value="azteca">🟢 Banco Azteca (Oficial)</option>
-                                <option value="bajio">🔵 BanBajío (Oficial)</option>
-                                <option value="personalizado">📁 Subir Logo Propio...</option>
-                            </select>
                         </div>
                     </div>
 
-                    <!-- Previsualización / Subida de logo de banco -->
-                    <div class="flex items-center gap-3">
-                        <div class="w-28 h-9 rounded-xl flex items-center justify-center p-1.5 shrink-0 shadow-inner overflow-hidden"
-                             :style="'background:' + getBankStyle(cuentaForm.banco, cuentaForm.logo_banco).bg + '; border: 1px solid ' + getBankStyle(cuentaForm.banco, cuentaForm.logo_banco).border">
-                            <template x-if="cuentaForm.logo_banco && cuentaForm.logo_banco.startsWith('data:image')">
-                                <img :src="cuentaForm.logo_banco" class="h-full object-contain">
-                            </template>
-                            <template x-if="!cuentaForm.logo_banco || !cuentaForm.logo_banco.startsWith('data:image')">
-                                <span class="text-xs font-black tracking-wider text-center" :style="'color:' + getBankStyle(cuentaForm.banco, cuentaForm.logo_banco).text" x-text="getBankStyle(cuentaForm.banco, cuentaForm.logo_banco).name"></span>
-                            </template>
-                        </div>
-                        <div class="flex-1 space-y-1">
-                            <input type="file" accept="image/*" @change="subirLogoBanco($event)" class="w-full text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-sky-400 hover:file:bg-slate-700 cursor-pointer">
-                            <div class="text-[10px] text-slate-500">Opcional: Subir imagen PNG si prefieres logo propio.</div>
+                    <!-- SECCIÓN 2: INSTITUCIÓN BANCARIA & LOGO -->
+                    <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3 flex flex-col justify-between">
+                        <div class="space-y-3">
+                            <span class="text-xs font-bold text-sky-400 uppercase tracking-wider block">🏛️ Institución Bancaria</span>
+                            
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-300 mb-1">Banco Oficial *</label>
+                                    <input list="listaBancosModal" type="text" x-model="cuentaForm.banco" @change="seleccionarBancoPreset(cuentaForm.banco)" required placeholder="Ej. Banorte / Scotiabank / BBVA" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:ring-2 focus:ring-sky-500">
+                                    <datalist id="listaBancosModal">
+                                        <option value="Banorte"></option>
+                                        <option value="Scotiabank"></option>
+                                        <option value="BBVA"></option>
+                                        <option value="Santander"></option>
+                                        <option value="Citibanamex"></option>
+                                        <option value="HSBC"></option>
+                                        <option value="Banco Azteca"></option>
+                                        <option value="BanBajío"></option>
+                                        <option value="Banregio"></option>
+                                        <option value="Inbursa"></option>
+                                        <option value="Afirme"></option>
+                                    </datalist>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-300 mb-1">Estilo / Preset de Logo</label>
+                                    <select x-model="cuentaForm.logo_banco" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:ring-2 focus:ring-sky-500">
+                                        <option value="banorte">🔴 Banorte (Oficial)</option>
+                                        <option value="scotiabank">🔴 Scotiabank (Oficial)</option>
+                                        <option value="bbva">🔵 BBVA (Oficial)</option>
+                                        <option value="santander">🔴 Santander (Oficial)</option>
+                                        <option value="citibanamex">🔵 Citibanamex (Oficial)</option>
+                                        <option value="hsbc">🔴 HSBC (Oficial)</option>
+                                        <option value="azteca">🟢 Banco Azteca (Oficial)</option>
+                                        <option value="bajio">🔵 BanBajío (Oficial)</option>
+                                        <option value="personalizado">📁 Subir Logo Propio...</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Previsualización / Subida de logo de banco -->
+                            <div class="flex items-center gap-3">
+                                <div class="w-28 h-9 rounded-xl flex items-center justify-center p-1.5 shrink-0 shadow-inner overflow-hidden"
+                                     :style="'background:' + getBankStyle(cuentaForm.banco, cuentaForm.logo_banco).bg + '; border: 1px solid ' + getBankStyle(cuentaForm.banco, cuentaForm.logo_banco).border">
+                                    <template x-if="cuentaForm.logo_banco && cuentaForm.logo_banco.startsWith('data:image')">
+                                        <img :src="cuentaForm.logo_banco" class="h-full object-contain">
+                                    </template>
+                                    <template x-if="!cuentaForm.logo_banco || !cuentaForm.logo_banco.startsWith('data:image')">
+                                        <span class="text-xs font-black tracking-wider text-center" :style="'color:' + getBankStyle(cuentaForm.banco, cuentaForm.logo_banco).text" x-text="getBankStyle(cuentaForm.banco, cuentaForm.logo_banco).name"></span>
+                                    </template>
+                                </div>
+                                <div class="flex-1 space-y-1">
+                                    <input type="file" accept="image/*" @change="subirLogoBanco($event)" class="w-full text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-sky-400 hover:file:bg-slate-700 cursor-pointer">
+                                    <div class="text-[10px] text-slate-500">Opcional: Subir imagen PNG si prefieres logo propio.</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- SECCIÓN 3: DATOS BANCARIOS & SALDO -->
-                <div class="space-y-3">
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-300 mb-1">CLABE Interbancaria (18 dígitos) *</label>
-                        <input type="text" x-model="cuentaForm.clabe" maxlength="18" minlength="18" required placeholder="012180001234567890" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono">
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-3">
+                <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
+                    <span class="text-xs font-bold text-amber-400 uppercase tracking-wider block">💳 Cuentas & Saldo Contable</span>
+                    
+                    <div class="grid grid-cols-1 gap-3" :class="{'md:grid-cols-3': tamanioModal !== 'pequeno', 'sm:grid-cols-2': tamanioModal === 'pequeno'}">
                         <div>
-                            <label class="block text-xs font-semibold text-slate-300 mb-1">Número de Cuenta *</label>
-                            <input type="text" x-model="cuentaForm.numero_cuenta" required placeholder="0123456789" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono">
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">CLABE Interbancaria (18 dígitos) *</label>
+                            <input type="text" x-model="cuentaForm.clabe" maxlength="18" minlength="18" required placeholder="012180001234567890" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono focus:ring-2 focus:ring-amber-500">
                         </div>
                         <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Número de Cuenta *</label>
+                            <input type="text" x-model="cuentaForm.numero_cuenta" required placeholder="0123456789" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono focus:ring-2 focus:ring-amber-500">
+                        </div>
+                        <div :class="{'sm:col-span-2 md:col-span-1': tamanioModal === 'pequeno'}">
                             <label class="block text-xs font-semibold text-slate-300 mb-1">Saldo Inicial ($)</label>
-                            <input type="number" step="0.01" x-model="cuentaForm.saldo_inicial" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono">
+                            <input type="number" step="0.01" x-model="cuentaForm.saldo_inicial" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono focus:ring-2 focus:ring-amber-500">
                         </div>
                     </div>
                 </div>
 
-                <div class="flex justify-end space-x-2 pt-3 border-t border-slate-800">
-                    <button type="button" @click="openModalCuenta = false" class="px-4 py-2 text-xs text-slate-400 hover:text-white">Cancelar</button>
-                    <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-xl" x-text="cuentaEnEdicion ? 'Actualizar Cuenta y Logos' : 'Guardar Cuenta'"></button>
+                <div class="flex flex-col-reverse sm:flex-row justify-between items-center gap-2 pt-3 border-t border-slate-800">
+                    <div class="text-[11px] text-slate-500">
+                        📱 En celular se adapta automáticamente al 100% de la pantalla.
+                    </div>
+                    <div class="flex items-center space-x-2 w-full sm:w-auto justify-end">
+                        <button type="button" @click="openModalCuenta = false" class="px-4 py-2 text-xs text-slate-400 hover:text-white">Cancelar</button>
+                        <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition shadow-lg" x-text="cuentaEnEdicion ? 'Actualizar Cuenta y Logos' : 'Guardar Cuenta'"></button>
+                    </div>
                 </div>
             </form>
         </div>
@@ -1172,14 +1236,29 @@
     </div>
 
     <!-- MODAL: MODIFICAR MOVIMIENTO / TRANSACCIÓN -->
-    <div x-show="openModalEditarTransaccion" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" x-cloak>
-        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4" @click.away="openModalEditarTransaccion = false">
-            <div class="flex justify-between items-center">
-                <h3 class="text-base font-bold text-white">✏️ Modificar Movimiento</h3>
-                <button @click="openModalEditarTransaccion = false" class="text-slate-400 hover:text-white text-sm">✕</button>
-            </div>
+    <div x-show="openModalEditarTransaccion" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-sm" x-cloak>
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl w-full p-4 sm:p-6 shadow-2xl space-y-4 transition-all duration-300 overflow-y-auto max-h-[92vh]"
+             :class="{
+                 'max-w-lg': tamanioModal === 'pequeno',
+                 'max-w-2xl': tamanioModal === 'normal',
+                 'max-w-4xl': tamanioModal === 'grande'
+             }"
+             @click.away="openModalEditarTransaccion = false">
             
-            <p class="text-xs text-slate-400">Edita los datos del movimiento. El saldo de las cuentas se recalculará automáticamente.</p>
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-2.5 border-b border-slate-800">
+                <div>
+                    <h3 class="text-base font-bold text-white">✏️ Modificar Movimiento</h3>
+                    <p class="text-xs text-slate-400">Edita los datos del movimiento. El saldo de las cuentas se recalculará automáticamente.</p>
+                </div>
+
+                <!-- CONTROLES DE TAMAÑO -->
+                <div class="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 self-end sm:self-auto">
+                    <button type="button" @click="setTamanioModal('pequeno')" :class="tamanioModal === 'pequeno' ? 'bg-emerald-600 text-white font-bold shadow' : 'text-slate-400 hover:text-white'" class="px-2 py-0.5 text-[10px] rounded-lg transition">📱 Pequeño</button>
+                    <button type="button" @click="setTamanioModal('normal')" :class="tamanioModal === 'normal' ? 'bg-emerald-600 text-white font-bold shadow' : 'text-slate-400 hover:text-white'" class="px-2 py-0.5 text-[10px] rounded-lg transition">💻 Normal</button>
+                    <button type="button" @click="setTamanioModal('grande')" :class="tamanioModal === 'grande' ? 'bg-emerald-600 text-white font-bold shadow' : 'text-slate-400 hover:text-white'" class="px-2 py-0.5 text-[10px] rounded-lg transition">🖥️ Grande</button>
+                    <button @click="openModalEditarTransaccion = false" class="text-slate-400 hover:text-white text-sm ml-2 px-1">✕</button>
+                </div>
+            </div>
 
             <form @submit.prevent="guardarEdicionTransaccion" class="space-y-3.5">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1466,6 +1545,7 @@
                 datosEstadoCuenta: null,
                 loadingCorte: false,
                 cuentaEnEdicion: null,
+                tamanioModal: localStorage.getItem('hyma_modal_size') || 'grande',
                 categoriaEnEdicion: { id: null, nombre: '', tipo: 'SALIDA', tipo_entidad_sugerida: 'GENERAL', descripcion: '' },
                 entidadEnEdicion: { id: null, nombre: '', tipo_entidad: 'PROVEEDOR', rfc: '' },
                 editarTransForm: {
@@ -1892,6 +1972,11 @@
                         moneda: cta.moneda
                     };
                     this.openModalCuenta = true;
+                },
+
+                setTamanioModal(tam) {
+                    this.tamanioModal = tam;
+                    localStorage.setItem('hyma_modal_size', tam);
                 },
 
                 getBankStyle(banco, logoBanco) {
