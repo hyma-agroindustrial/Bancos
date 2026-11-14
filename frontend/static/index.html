@@ -813,13 +813,12 @@
                 <form @submit.prevent="guardarTransaccionManual" class="space-y-4">
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         
-                        <!-- Cuenta Afectada -->
+                        <!-- Cuenta Afectada (Bloqueada al Banco Activo) -->
                         <div>
-                            <label class="block text-xs font-semibold text-slate-300 mb-1">Cuenta Bancaria *</label>
-                            <select x-model="form.cuenta_id" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500">
-                                <option value="">Selecciona cuenta...</option>
-                                <template x-for="cta in cuentasPermitidas" :key="cta.id">
-                                    <option :value="cta.id" x-text="formatCuentaLabel(cta)"></option>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Cuenta Bancaria (Activa) *</label>
+                            <select x-model="form.cuenta_id" disabled required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-bold opacity-95 cursor-not-allowed">
+                                <template x-if="cuentaActivaPrincipal">
+                                    <option :value="cuentaActivaPrincipal.id" x-text="formatCuentaLabel(cuentaActivaPrincipal)"></option>
                                 </template>
                             </select>
                         </div>
@@ -932,11 +931,10 @@
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left mb-4">
                         <div>
-                            <label class="block text-xs font-semibold text-slate-300 mb-1">Cuenta Destino *</label>
-                            <select x-model="pdfCuentaId" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
-                                <option value="">Selecciona cuenta...</option>
-                                <template x-for="cta in cuentasPermitidas" :key="cta.id">
-                                    <option :value="cta.id" x-text="formatCuentaLabel(cta)"></option>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Cuenta Destino (Activa) *</label>
+                            <select x-model="pdfCuentaId" disabled class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-bold opacity-95 cursor-not-allowed">
+                                <template x-if="cuentaActivaPrincipal">
+                                    <option :value="cuentaActivaPrincipal.id" x-text="formatCuentaLabel(cuentaActivaPrincipal)"></option>
                                 </template>
                             </select>
                         </div>
@@ -1042,11 +1040,10 @@
                 <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 space-y-3 no-print">
                     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
                         <div>
-                            <label class="block text-[11px] font-semibold text-slate-400 mb-1">Cuenta</label>
-                            <select x-model="filtros.cuenta_id" @change="filtrarTransacciones" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
-                                <option value="">Todas las cuentas</option>
-                                <template x-for="cta in cuentasPermitidas" :key="cta.id">
-                                    <option :value="cta.id" x-text="formatCuentaLabel(cta)"></option>
+                            <label class="block text-[11px] font-semibold text-slate-400 mb-1">Cuenta Activa</label>
+                            <select x-model="filtros.cuenta_id" disabled class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-bold opacity-95 cursor-not-allowed">
+                                <template x-if="cuentaActivaPrincipal">
+                                    <option :value="cuentaActivaPrincipal.id" x-text="formatCuentaLabel(cuentaActivaPrincipal)"></option>
                                 </template>
                             </select>
                         </div>
@@ -1289,12 +1286,12 @@
                 <!-- BARRA DE PARÁMETROS DEL CORTE (NO PRINT) -->
                 <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4 no-print">
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1">
-                        <!-- Cuenta Bancaria -->
+                        <!-- Cuenta Bancaria (Bloqueada al Banco Activo) -->
                         <div>
-                            <label class="block text-[11px] font-semibold text-slate-400 mb-1">Cuenta Bancaria *</label>
-                            <select x-model="corteCuentaId" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
-                                <template x-for="cta in cuentasPermitidas" :key="cta.id">
-                                    <option :value="cta.id" x-text="formatCuentaLabel(cta)"></option>
+                            <label class="block text-[11px] font-semibold text-slate-400 mb-1">Cuenta Bancaria Activa *</label>
+                            <select x-model="corteCuentaId" disabled class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-bold opacity-95 cursor-not-allowed">
+                                <template x-if="cuentaActivaPrincipal">
+                                    <option :value="cuentaActivaPrincipal.id" x-text="formatCuentaLabel(cuentaActivaPrincipal)"></option>
                                 </template>
                             </select>
                         </div>
@@ -1547,13 +1544,12 @@
 
                     <form @submit.prevent="subirArchivoEstadoCuenta" class="space-y-4">
                         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                            <!-- Cuenta Bancaria -->
+                            <!-- Cuenta Bancaria (Bloqueada al Banco Activo) -->
                             <div>
-                                <label class="block text-xs font-semibold text-slate-300 mb-1">Cuenta Bancaria *</label>
-                                <select x-model="edoPdfForm.cuenta_id" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
-                                    <option value="">Selecciona cuenta...</option>
-                                    <template x-for="cta in cuentasPermitidas" :key="cta.id">
-                                        <option :value="cta.id" x-text="formatCuentaLabel(cta)"></option>
+                                <label class="block text-xs font-semibold text-slate-300 mb-1">Cuenta Bancaria Activa *</label>
+                                <select x-model="edoPdfForm.cuenta_id" disabled required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-bold opacity-95 cursor-not-allowed">
+                                    <template x-if="cuentaActivaPrincipal">
+                                        <option :value="cuentaActivaPrincipal.id" x-text="formatCuentaLabel(cuentaActivaPrincipal)"></option>
                                     </template>
                                 </select>
                             </div>
@@ -1620,13 +1616,12 @@
                             Estados de Cuenta Almacenados (<span x-text="archivosEstadoCuentaFiltrados.length"></span>)
                         </h3>
 
-                        <!-- FILTROS RÁPIDOS -->
+                        <!-- FILTROS RÁPIDOS (Cuenta bloqueada al Banco Activo) -->
                         <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-                            <!-- Filtro Cuenta -->
-                            <select x-model="filtroEdoCuentaId" class="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-white">
-                                <option value="">Todas las cuentas</option>
-                                <template x-for="cta in cuentasPermitidas" :key="cta.id">
-                                    <option :value="cta.id" x-text="cta.banco + ' · ' + cta.nombre"></option>
+                            <!-- Filtro Cuenta (Bloqueada al Banco Activo) -->
+                            <select x-model="filtroEdoCuentaId" disabled class="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-white font-bold opacity-95 cursor-not-allowed">
+                                <template x-if="cuentaActivaPrincipal">
+                                    <option :value="cuentaActivaPrincipal.id" x-text="cuentaActivaPrincipal.banco + ' · ' + cuentaActivaPrincipal.nombre"></option>
                                 </template>
                             </select>
 
@@ -2243,10 +2238,10 @@
             <form @submit.prevent="guardarEdicionTransaccion" class="space-y-3.5">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                        <label class="block text-xs font-semibold text-slate-300 mb-1">Cuenta Bancaria *</label>
-                        <select x-model="editarTransForm.cuenta_id" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
-                            <template x-for="cta in cuentasPermitidas" :key="cta.id">
-                                <option :value="cta.id" x-text="formatCuentaLabel(cta)"></option>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Cuenta Bancaria Activa *</label>
+                        <select x-model="editarTransForm.cuenta_id" disabled required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-bold opacity-95 cursor-not-allowed">
+                            <template x-if="cuentaActivaPrincipal">
+                                <option :value="cuentaActivaPrincipal.id" x-text="formatCuentaLabel(cuentaActivaPrincipal)"></option>
                             </template>
                         </select>
                     </div>
@@ -2913,24 +2908,21 @@
                                 this.cuentaActivaPrincipalId = String(idActivo);
                                 localStorage.setItem('hyma_cuenta_activa', String(idActivo));
                             }
-                            if (!this.form.cuenta_id || !ids.includes(Number(this.form.cuenta_id))) {
-                                this.form.cuenta_id = idActivo;
-                            }
-                            if (!this.pdfCuentaId || !ids.includes(Number(this.pdfCuentaId))) {
-                                this.pdfCuentaId = idActivo;
-                            }
-                            if (!this.corteCuentaId || !ids.includes(Number(this.corteCuentaId))) {
-                                this.corteCuentaId = idActivo;
-                            }
-                            if (!this.edoPdfForm.cuenta_id || !ids.includes(Number(this.edoPdfForm.cuenta_id))) {
-                                this.edoPdfForm.cuenta_id = idActivo;
-                            }
+                            // Vincular jerárquicamente todos los módulos a la Cuenta Activa
+                            this.form.cuenta_id = idActivo;
+                            this.pdfCuentaId = idActivo;
+                            this.corteCuentaId = idActivo;
+                            this.edoPdfForm.cuenta_id = idActivo;
+                            this.filtros.cuenta_id = String(idActivo);
+                            this.filtroEdoCuentaId = String(idActivo);
                         } else {
                             this.cuentaActivaPrincipalId = '';
                             this.form.cuenta_id = '';
                             this.pdfCuentaId = '';
                             this.corteCuentaId = '';
                             this.edoPdfForm.cuenta_id = '';
+                            this.filtros.cuenta_id = '';
+                            this.filtroEdoCuentaId = '';
                         }
                     }
                 },
@@ -2980,17 +2972,18 @@
                     localStorage.setItem('hyma_cuenta_activa', String(cta.id));
                     this.openMenuBancos = false;
 
-                    // Sincronizar automáticamente la cuenta activa en los módulos de trabajo
+                    // Sincronizar jerárquicamente todos los módulos de trabajo al banco activo
                     this.form.cuenta_id = cta.id;
                     this.pdfCuentaId = cta.id;
                     this.corteCuentaId = cta.id;
                     this.edoPdfForm.cuenta_id = cta.id;
+                    this.filtros.cuenta_id = String(cta.id);
+                    this.filtroEdoCuentaId = String(cta.id);
+                    this.movimientosExtraidos = [];
 
-                    if (this.activeTab === 'corte') {
+                    await this.filtrarTransacciones();
+                    if (this.activeTab === 'corte' || this.datosEstadoCuenta) {
                         await this.generarEstadoCuenta();
-                    } else if (this.activeTab === 'reportes' && this.filtros.cuenta_id) {
-                        this.filtros.cuenta_id = String(cta.id);
-                        await this.filtrarTransacciones();
                     }
                 },
 
@@ -3017,10 +3010,10 @@
                 },
 
                 get archivosEstadoCuentaFiltrados() {
-                    const idsPermitidos = this.cuentasPermitidas.map(c => Number(c.id));
+                    const ctaActiva = this.cuentaActivaPrincipal;
+                    if (!ctaActiva) return [];
                     return this.archivosEstadoCuenta.filter(a => {
-                        if (!idsPermitidos.includes(Number(a.cuenta_id))) return false;
-                        if (this.filtroEdoCuentaId && Number(a.cuenta_id) !== Number(this.filtroEdoCuentaId)) return false;
+                        if (Number(a.cuenta_id) !== Number(ctaActiva.id)) return false;
                         if (this.filtroEdoAnio && Number(a.anio) !== Number(this.filtroEdoAnio)) return false;
                         if (this.filtroEdoMes && Number(a.mes) !== Number(this.filtroEdoMes)) return false;
                         return true;
@@ -3642,15 +3635,11 @@
                 },
 
                 get cuentaActivaReporte() {
+                    if (this.cuentaActivaPrincipal) {
+                        return this.cuentaActivaPrincipal;
+                    }
                     if (this.filtros.cuenta_id) {
                         return this.cuentas.find(c => String(c.id) === String(this.filtros.cuenta_id)) || null;
-                    }
-                    // Si todas las transacciones del reporte pertenecen a una misma cuenta, usar esa cuenta para el encabezado del PDF
-                    if (this.transacciones && this.transacciones.length > 0) {
-                        const firstId = this.transacciones[0].cuenta_id;
-                        if (this.transacciones.every(t => t.cuenta_id === firstId)) {
-                            return this.cuentas.find(c => Number(c.id) === Number(firstId)) || null;
-                        }
                     }
                     return null;
                 },
@@ -3668,8 +3657,9 @@
                 },
 
                 limpiarFiltrosReporte() {
+                    const idActiva = this.cuentaActivaPrincipal ? String(this.cuentaActivaPrincipal.id) : '';
                     this.filtros = {
-                        cuenta_id: '',
+                        cuenta_id: idActiva,
                         categoria_id: '',
                         entidad_id: '',
                         fecha_inicio: '',
@@ -3683,8 +3673,15 @@
                 },
 
                 async filtrarTransacciones() {
+                    const idActiva = this.cuentaActivaPrincipal ? String(this.cuentaActivaPrincipal.id) : (this.filtros.cuenta_id ? String(this.filtros.cuenta_id) : '');
+                    if (!idActiva) {
+                        this.transacciones = [];
+                        this.resumenReporte = { total_entradas: 0, total_salidas: 0, balance_periodo: 0 };
+                        return;
+                    }
+                    this.filtros.cuenta_id = idActiva;
                     const params = new URLSearchParams();
-                    if (this.filtros.cuenta_id) params.append('cuenta_id', this.filtros.cuenta_id);
+                    params.append('cuenta_id', idActiva);
                     if (this.filtros.categoria_id) params.append('categoria_id', this.filtros.categoria_id);
                     if (this.filtros.entidad_id) params.append('entidad_id', this.filtros.entidad_id);
                     if (this.filtros.fecha_inicio) params.append('fecha_inicio', this.filtros.fecha_inicio);
@@ -3694,6 +3691,7 @@
 
                     if (resTr.ok) {
                         let todas = await resTr.json();
+                        todas = todas.filter(t => String(t.cuenta_id) === String(idActiva));
                         if (this.usuarioActual && this.usuarioActual.rol !== 'ADMIN') {
                             const idsPermitidos = (this.usuarioActual.cuentas_permitidas || []).map(Number);
                             todas = todas.filter(t => idsPermitidos.includes(Number(t.cuenta_id)));
