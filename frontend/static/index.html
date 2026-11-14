@@ -535,10 +535,102 @@
             </div>
             
             <div class="flex items-center space-x-2">
-                <!-- Botón Personalizar Encabezado (Solo ADMIN) -->
-                <button x-show="usuarioActual && usuarioActual.rol === 'ADMIN'" @click="abrirModalConfig()" title="Personalizar Logotipo, Título y Descripción" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 p-2 sm:px-2.5 sm:py-2 rounded-lg font-medium transition flex items-center gap-1">
+                <!-- Menú Desplegable BANCOS (A la izquierda de Configuración) -->
+                <div class="relative" x-show="usuarioActual" @click.outside="openMenuBancos = false">
+                    <button @click="openMenuBancos = !openMenuBancos"
+                            title="Seleccionar Empresa y Cuenta Bancaria Activa"
+                            class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500 px-3 py-2 rounded-lg font-bold transition flex items-center gap-1.5 shadow-sm">
+                        <span>🏦</span>
+                        <span>BANCOS</span>
+                        <span class="text-[10px] opacity-90 transition-transform duration-150" :class="openMenuBancos ? 'rotate-180' : ''">▾</span>
+                    </button>
+
+                    <!-- Submenú Jerárquico: EMPRESAS -> CUENTAS ACTIVAS -->
+                    <div x-show="openMenuBancos"
+                         x-transition:enter="transition ease-out duration-150"
+                         x-transition:enter-start="opacity-0 scale-95 -translate-y-1"
+                         x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+                         x-transition:leave="transition ease-in duration-100"
+                         x-transition:leave-start="opacity-100 scale-100"
+                         x-transition:leave-end="opacity-0 scale-95"
+                         class="absolute left-0 sm:right-0 sm:left-auto mt-2 w-80 sm:w-96 max-h-[80vh] overflow-y-auto bg-slate-900 border-2 border-slate-700 rounded-2xl shadow-2xl z-50 p-3 space-y-2.5"
+                         x-cloak>
+                        <div class="flex items-center justify-between px-2 pb-2 border-b border-slate-800">
+                            <div>
+                                <h4 class="text-xs font-black uppercase tracking-wider text-white">🏦 Directorio de Bancos</h4>
+                                <p class="text-[10px] text-slate-400">Selecciona la cuenta con la que deseas trabajar</p>
+                            </div>
+                            <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800/80" x-text="cuentasPermitidas.length + ' activa(s)'"></span>
+                        </div>
+
+                        <!-- Agrupación por Empresa (HYMA AGROINDUSTRIAL, QUADAGRI, VAFAGRI...) -->
+                        <div class="space-y-2">
+                            <template x-for="grupo in bancosAgrupadosPorEmpresa" :key="grupo.empresa">
+                                <div class="bg-slate-950/90 border border-slate-800 rounded-xl overflow-hidden">
+                                    <!-- Encabezado de la Empresa (Click para desplegar/contraer sus cuentas) -->
+                                    <button type="button"
+                                            @click="toggleEmpresaMenu(grupo.empresa)"
+                                            class="w-full px-3 py-2 bg-slate-800/70 hover:bg-slate-800 flex items-center justify-between text-left transition border-b border-slate-800/80">
+                                        <div class="flex items-center gap-2 min-w-0">
+                                            <div class="w-6 h-6 rounded-md bg-slate-900 border border-slate-700 p-0.5 flex items-center justify-center shrink-0 overflow-hidden">
+                                                <template x-if="grupo.logo_empresa">
+                                                    <img :src="grupo.logo_empresa" class="w-full h-full object-contain">
+                                                </template>
+                                                <template x-if="!grupo.logo_empresa">
+                                                    <span class="text-xs">🏢</span>
+                                                </template>
+                                            </div>
+                                            <div class="truncate">
+                                                <span class="text-xs font-black text-white uppercase tracking-wide block truncate" x-text="grupo.empresa"></span>
+                                                <span x-show="grupo.rfc" class="text-[9px] font-mono text-slate-400 block" x-text="'RFC: ' + grupo.rfc"></span>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-1.5 shrink-0">
+                                            <span class="text-[10px] font-mono text-slate-400" x-text="grupo.cuentas.length + ' cta(s)'"></span>
+                                            <span class="text-xs text-slate-400 transition-transform duration-150" :class="esEmpresaExpandida(grupo.empresa) ? 'rotate-90' : ''">▸</span>
+                                        </div>
+                                    </button>
+
+                                    <!-- Sublista de Cuentas Activas de esta Empresa -->
+                                    <div x-show="esEmpresaExpandida(grupo.empresa)" class="divide-y divide-slate-800/60 p-1.5 space-y-1">
+                                        <template x-for="cta in grupo.cuentas" :key="cta.id">
+                                            <button type="button"
+                                                    @click="seleccionarBancoActivo(cta)"
+                                                    class="w-full p-2 rounded-lg text-left transition flex items-center justify-between gap-2"
+                                                    :class="cuentaActivaPrincipal && Number(cuentaActivaPrincipal.id) === Number(cta.id) ? 'bg-emerald-950/60 border border-emerald-500/80 shadow-sm' : 'hover:bg-slate-900 border border-transparent'">
+                                                <div class="min-w-0 flex-1 pl-1">
+                                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                                        <span class="text-[10px] font-black px-2 py-0.5 rounded shadow-sm leading-tight"
+                                                              :style="'background:' + getBankStyle(cta.banco, cta.logo_banco).bg + '; color:' + getBankStyle(cta.banco, cta.logo_banco).text + '; border: 1px solid ' + getBankStyle(cta.banco, cta.logo_banco).border"
+                                                              x-text="cta.banco"></span>
+                                                        <span x-show="cuentaActivaPrincipal && Number(cuentaActivaPrincipal.id) === Number(cta.id)"
+                                                              class="text-[9px] font-black uppercase px-1.5 py-0.2 rounded bg-emerald-600 text-white">
+                                                            ACTIVO
+                                                        </span>
+                                                    </div>
+                                                    <div class="text-[11px] font-mono text-slate-400 mt-1 truncate">
+                                                        Cta: <span class="text-slate-200 font-semibold" x-text="cta.numero_cuenta"></span>
+                                                    </div>
+                                                </div>
+                                                <div class="text-right shrink-0">
+                                                    <div class="text-xs font-black font-mono"
+                                                         :class="cta.saldo_actual >= 0 ? 'text-emerald-400' : 'text-rose-400'"
+                                                         x-text="formatMoney(cta.saldo_actual)"></div>
+                                                    <div class="text-[9px] text-slate-400">Saldo Actual</div>
+                                                </div>
+                                            </button>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Botón Configuración (Antes Personalizar - Solo ADMIN) -->
+                <button x-show="usuarioActual && usuarioActual.rol === 'ADMIN'" @click="abrirModalConfig()" title="Configuración de Logotipo, Colores y Encabezado" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 p-2 sm:px-2.5 sm:py-2 rounded-lg font-medium transition flex items-center gap-1">
                     <span>⚙️</span>
-                    <span class="hidden md:inline">Personalizar</span>
+                    <span class="hidden md:inline">Configuración</span>
                 </button>
 
                 <!-- Botón Usuarios (Solo ADMIN) -->
@@ -578,82 +670,88 @@
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-6">
 
-        <!-- 1. RESUMEN DE CUENTAS BANCARIAS (MODIFICAR & ELIMINAR) -->
+        <!-- 1. BANCO ACTIVO EN PANTALLA PRINCIPAL (SOLO MUESTRA LA CUENTA SELECCIONADA) -->
         <section class="no-print">
-            <div class="flex justify-between items-center mb-3">
-                <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400">Cuentas Bancarias Disponibles</h2>
-                <span class="text-xs text-slate-500 font-mono" x-text="cuentasPermitidas.length + ' cuenta(s)'"></span>
+            <div class="flex justify-between items-center mb-2.5">
+                <div class="flex items-center gap-2">
+                    <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400">Cuenta Bancaria Activa</h2>
+                    <span x-show="cuentaActivaPrincipal" class="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800/80">En Operación</span>
+                </div>
+                <button type="button"
+                        @click="openMenuBancos = true"
+                        class="text-xs text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1 transition">
+                    <span>🏦</span>
+                    <span>Cambiar Banco (<span x-text="cuentasPermitidas.length"></span> cuentas disponibles)</span>
+                </button>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <template x-for="cta in cuentasPermitidas" :key="cta.id">
-                    <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 shadow-sm hover:border-emerald-500/50 transition relative group flex flex-col justify-between">
-                        
-                        <!-- Acciones: Modificar y Eliminar (Solo ADMIN) -->
-                        <div class="absolute top-3 right-3 flex space-x-1.5 z-10" x-show="usuarioActual && usuarioActual.rol === 'ADMIN'">
-                            <button @click="abrirModalEditarCuenta(cta)" title="Modificar Datos y Logos" class="p-1.5 text-slate-400 hover:text-white bg-slate-900/90 hover:bg-slate-700 rounded-lg text-xs transition border border-slate-700 shadow">
-                                ✏️
-                            </button>
-                            <button @click="eliminarCuenta(cta)" title="Eliminar Cuenta" class="p-1.5 text-slate-400 hover:text-rose-400 bg-slate-900/90 hover:bg-rose-950 rounded-lg text-xs transition border border-slate-700 shadow">
-                                🗑️
-                            </button>
-                        </div>
-
-                        <!-- Encabezado de la Tarjeta con Logos -->
-                        <div class="flex items-start gap-3 pr-16">
-                            <!-- Logo Empresa -->
-                            <div class="w-11 h-11 rounded-xl bg-slate-900 border border-slate-700 p-1 flex items-center justify-center shrink-0 overflow-hidden shadow-inner">
-                                <template x-if="cta.logo_empresa">
-                                    <img :src="cta.logo_empresa" alt="Empresa" class="w-full h-full object-contain rounded">
+            <!-- Tarjeta Única del Banco Activo -->
+            <template x-if="cuentaActivaPrincipal">
+                <div class="bg-slate-800/80 border-2 border-emerald-500/40 rounded-2xl p-4 sm:p-5 shadow-md transition relative group">
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <!-- Lado Izquierdo: Logo Empresa, Banco, Empresa, Cuenta y CLABE -->
+                        <div class="flex items-start sm:items-center gap-3.5">
+                            <div class="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-700 p-1.5 flex items-center justify-center shrink-0 overflow-hidden shadow-inner">
+                                <template x-if="cuentaActivaPrincipal.logo_empresa">
+                                    <img :src="cuentaActivaPrincipal.logo_empresa" alt="Empresa" class="w-full h-full object-contain rounded">
                                 </template>
-                                <template x-if="!cta.logo_empresa && config.logo_url">
+                                <template x-if="!cuentaActivaPrincipal.logo_empresa && config.logo_url">
                                     <img :src="config.logo_url" alt="Empresa" class="w-full h-full object-contain rounded">
                                 </template>
-                                <template x-if="!cta.logo_empresa && !config.logo_url">
-                                    <span class="text-sm font-bold text-emerald-400">🏢</span>
+                                <template x-if="!cuentaActivaPrincipal.logo_empresa && !config.logo_url">
+                                    <span class="text-lg font-bold text-emerald-400">🏢</span>
                                 </template>
                             </div>
 
-                            <!-- Info Empresa y Banco -->
-                            <div class="min-w-0 flex-1">
-                                <div class="flex items-center gap-1.5 flex-wrap">
-                                    <!-- Badge Banco con estilo oficial -->
-                                    <span class="text-[10px] font-black px-2 py-0.5 rounded shadow-sm flex items-center gap-1 leading-tight"
-                                          :style="'background:' + getBankStyle(cta.banco, cta.logo_banco).bg + '; color:' + getBankStyle(cta.banco, cta.logo_banco).text + '; border: 1px solid ' + getBankStyle(cta.banco, cta.logo_banco).border">
-                                        <span x-text="cta.banco"></span>
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <span class="text-xs font-black px-2.5 py-0.5 rounded shadow-sm flex items-center gap-1 leading-tight"
+                                          :style="'background:' + getBankStyle(cuentaActivaPrincipal.banco, cuentaActivaPrincipal.logo_banco).bg + '; color:' + getBankStyle(cuentaActivaPrincipal.banco, cuentaActivaPrincipal.logo_banco).text + '; border: 1px solid ' + getBankStyle(cuentaActivaPrincipal.banco, cuentaActivaPrincipal.logo_banco).border">
+                                        <span x-text="cuentaActivaPrincipal.banco"></span>
                                     </span>
-                                    <span x-show="cta.rfc_empresa" class="text-[9px] font-mono text-slate-400 px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 leading-tight" x-text="cta.rfc_empresa"></span>
+                                    <span x-show="cuentaActivaPrincipal.rfc_empresa" class="text-[10px] font-mono text-slate-400 px-2 py-0.5 rounded bg-slate-900 border border-slate-700 leading-tight" x-text="'RFC: ' + cuentaActivaPrincipal.rfc_empresa"></span>
                                 </div>
-                                <h3 class="text-sm font-bold text-white mt-1 truncate" :title="cta.nombre" x-text="cta.nombre"></h3>
+                                <h3 class="text-base sm:text-lg font-black text-white mt-1 tracking-wide uppercase" x-text="cuentaActivaPrincipal.nombre"></h3>
+                                <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-xs text-slate-400 font-mono">
+                                    <div>Cuenta: <span class="text-slate-200 font-bold" x-text="cuentaActivaPrincipal.numero_cuenta"></span></div>
+                                    <div>CLABE: <span class="text-slate-200 font-bold" x-text="cuentaActivaPrincipal.clabe"></span></div>
+                                </div>
                             </div>
                         </div>
 
-                        <!-- Saldo Contable -->
-                        <div class="mt-4 pt-3 border-t border-slate-700/60 flex justify-between items-end">
-                            <div>
-                                <p class="text-[11px] text-slate-400">Saldo Contable Actual</p>
-                                <p class="text-xl font-black font-mono text-white" :class="cta.saldo_actual >= 0 ? 'text-emerald-400' : 'text-rose-400'" x-text="formatMoney(cta.saldo_actual)"></p>
+                        <!-- Lado Derecho: Saldo Contable, Entradas/Salidas y Botones de Edición -->
+                        <div class="flex items-center justify-between md:justify-end gap-5 pt-3 md:pt-0 border-t md:border-t-0 border-slate-700/60">
+                            <div class="text-left md:text-right">
+                                <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Saldo Contable Actual</p>
+                                <p class="text-2xl font-black font-mono mt-0.5"
+                                   :class="cuentaActivaPrincipal.saldo_actual >= 0 ? 'text-emerald-400' : 'text-rose-400'"
+                                   x-text="formatMoney(cuentaActivaPrincipal.saldo_actual)"></p>
                             </div>
-                            <div class="text-right text-[11px] text-slate-400 font-mono">
-                                <div><span class="text-emerald-400">+</span> <span x-text="formatMoney(cta.total_entradas)"></span></div>
-                                <div><span class="text-rose-400">-</span> <span x-text="formatMoney(cta.total_salidas)"></span></div>
-                            </div>
-                        </div>
 
-                        <!-- Datos de Cuenta y CLABE -->
-                        <div class="mt-2.5 pt-2 border-t border-slate-700/40 text-[11px] text-slate-400 space-y-0.5 font-mono">
-                            <div>Cuenta: <span class="text-slate-200" x-text="cta.numero_cuenta"></span></div>
-                            <div class="truncate">CLABE: <span class="text-slate-200" x-text="cta.clabe"></span></div>
+                            <div class="text-right text-xs text-slate-400 font-mono border-l border-slate-700/60 pl-4 space-y-0.5">
+                                <div><span class="text-emerald-400 font-bold">+</span> <span x-text="formatMoney(cuentaActivaPrincipal.total_entradas)"></span></div>
+                                <div><span class="text-rose-400 font-bold">-</span> <span x-text="formatMoney(cuentaActivaPrincipal.total_salidas)"></span></div>
+                            </div>
+
+                            <!-- Acciones: Modificar y Eliminar (Solo ADMIN) -->
+                            <div class="flex items-center space-x-1.5 pl-2" x-show="usuarioActual && usuarioActual.rol === 'ADMIN'">
+                                <button @click="abrirModalEditarCuenta(cuentaActivaPrincipal)" title="Modificar Datos y Logos de esta Cuenta" class="p-2 text-slate-400 hover:text-white bg-slate-900/90 hover:bg-slate-700 rounded-xl text-xs transition border border-slate-700 shadow">
+                                    ✏️
+                                </button>
+                                <button @click="eliminarCuenta(cuentaActivaPrincipal)" title="Eliminar Cuenta" class="p-2 text-slate-400 hover:text-rose-400 bg-slate-900/90 hover:bg-rose-950 rounded-xl text-xs transition border border-slate-700 shadow">
+                                    🗑️
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </template>
-
-                <!-- Aviso para operador sin cuentas -->
-                <div x-show="cuentasPermitidas.length === 0" class="col-span-full bg-amber-950/40 border border-amber-800/60 p-6 rounded-2xl text-center">
-                    <div class="text-3xl mb-2">🔒</div>
-                    <h3 class="text-base font-bold text-amber-300">No tienes cuentas asignadas</h3>
-                    <p class="text-xs text-slate-400 mt-1 max-w-md mx-auto">Tu usuario tiene rol de Operador pero aún no se le han asignado cuentas bancarias específicas. Solicita al Administrador que te asigne acceso en el módulo de Usuarios.</p>
                 </div>
+            </template>
+
+            <!-- Aviso para operador sin cuentas -->
+            <div x-show="cuentasPermitidas.length === 0" class="bg-amber-950/40 border border-amber-800/60 p-6 rounded-2xl text-center">
+                <div class="text-3xl mb-2">🔒</div>
+                <h3 class="text-base font-bold text-amber-300">No tienes cuentas asignadas</h3>
+                <p class="text-xs text-slate-400 mt-1 max-w-md mx-auto">Tu usuario tiene rol de Operador pero aún no se le han asignado cuentas bancarias específicas. Solicita al Administrador que te asigne acceso en el módulo de Usuarios.</p>
             </div>
         </section>
 
@@ -2454,6 +2552,9 @@
 
                 pdfFile: null,
                 pdfCuentaId: '',
+                openMenuBancos: false,
+                cuentaActivaPrincipalId: localStorage.getItem('hyma_cuenta_activa') || '',
+                empresasContraidasMenu: {},
                 openModalEntidad: false,
                 openModalCuenta: false,
                 openModalUsuarios: false,
@@ -2772,25 +2873,91 @@
                         this.cuentas = await res.json();
                         const disp = this.cuentasPermitidas;
                         if (disp.length > 0) {
-                            const ids = disp.map(c => c.id);
+                            const ids = disp.map(c => Number(c.id));
+                            let idActivo = Number(this.cuentaActivaPrincipalId);
+                            if (!idActivo || !ids.includes(idActivo)) {
+                                idActivo = disp[0].id;
+                                this.cuentaActivaPrincipalId = String(idActivo);
+                                localStorage.setItem('hyma_cuenta_activa', String(idActivo));
+                            }
                             if (!this.form.cuenta_id || !ids.includes(Number(this.form.cuenta_id))) {
-                                this.form.cuenta_id = disp[0].id;
+                                this.form.cuenta_id = idActivo;
                             }
                             if (!this.pdfCuentaId || !ids.includes(Number(this.pdfCuentaId))) {
-                                this.pdfCuentaId = disp[0].id;
+                                this.pdfCuentaId = idActivo;
                             }
                             if (!this.corteCuentaId || !ids.includes(Number(this.corteCuentaId))) {
-                                this.corteCuentaId = disp[0].id;
+                                this.corteCuentaId = idActivo;
                             }
                             if (!this.edoPdfForm.cuenta_id || !ids.includes(Number(this.edoPdfForm.cuenta_id))) {
-                                this.edoPdfForm.cuenta_id = disp[0].id;
+                                this.edoPdfForm.cuenta_id = idActivo;
                             }
                         } else {
+                            this.cuentaActivaPrincipalId = '';
                             this.form.cuenta_id = '';
                             this.pdfCuentaId = '';
                             this.corteCuentaId = '';
                             this.edoPdfForm.cuenta_id = '';
                         }
+                    }
+                },
+
+                get cuentaActivaPrincipal() {
+                    const disp = this.cuentasPermitidas;
+                    if (!disp || disp.length === 0) return null;
+                    if (this.cuentaActivaPrincipalId) {
+                        const encontrada = disp.find(c => String(c.id) === String(this.cuentaActivaPrincipalId));
+                        if (encontrada) return encontrada;
+                    }
+                    return disp[0];
+                },
+
+                get bancosAgrupadosPorEmpresa() {
+                    const gruposMap = new Map();
+                    for (const cta of this.cuentasPermitidas) {
+                        const empNombre = (cta.nombre || 'SIN EMPRESA').trim().toUpperCase();
+                        if (!gruposMap.has(empNombre)) {
+                            gruposMap.set(empNombre, {
+                                empresa: empNombre,
+                                rfc: cta.rfc_empresa || '',
+                                logo_empresa: cta.logo_empresa || '',
+                                cuentas: []
+                            });
+                        }
+                        const g = gruposMap.get(empNombre);
+                        if (!g.rfc && cta.rfc_empresa) g.rfc = cta.rfc_empresa;
+                        if (!g.logo_empresa && cta.logo_empresa) g.logo_empresa = cta.logo_empresa;
+                        g.cuentas.push(cta);
+                    }
+                    return Array.from(gruposMap.values());
+                },
+
+                esEmpresaExpandida(empresa) {
+                    // Por defecto todas las empresas aparecen desplegadas para acceso rápido, o se pueden contraer con un clic
+                    return !this.empresasContraidasMenu[empresa];
+                },
+
+                toggleEmpresaMenu(empresa) {
+                    this.empresasContraidasMenu[empresa] = !this.empresasContraidasMenu[empresa];
+                },
+
+                async seleccionarBancoActivo(cta) {
+                    if (!cta) return;
+                    this.cuentaActivaPrincipalId = String(cta.id);
+                    localStorage.setItem('hyma_cuenta_activa', String(cta.id));
+                    this.openMenuBancos = false;
+
+                    // Sincronizar automáticamente la cuenta activa en los módulos de trabajo
+                    this.form.cuenta_id = cta.id;
+                    this.pdfCuentaId = cta.id;
+                    this.corteCuentaId = cta.id;
+                    this.edoPdfForm.cuenta_id = cta.id;
+
+                    if (this.activeTab === 'corte') {
+                        await this.generarEstadoCuenta();
+                    } else if (this.activeTab === 'reportes' && this.filtros.cuenta_id) {
+                        this.filtros.cuenta_id = String(cta.id);
+                        await this.filtrarTransacciones();
                     }
                 },
 
