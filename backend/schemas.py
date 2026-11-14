@@ -9,6 +9,7 @@ class ConfiguracionData(BaseModel):
     nombre_sistema: str = Field(default="Consolidado de Bancos")
     descripcion_sistema: str = Field(default="Sistema de Control de Gastos & Cuentas Fiscales")
     logo_url: Optional[str] = Field(default="")
+    tema_color: Optional[str] = Field(default="perla")
 
 # --- USUARIOS & PIN AUTH ---
 class UsuarioLogin(BaseModel):

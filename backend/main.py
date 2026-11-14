@@ -127,7 +127,8 @@ def obtener_configuracion(db: Session = Depends(get_db)):
     return ConfiguracionData(
         nombre_sistema=cfg_dict.get("nombre_sistema", "Consolidado de Bancos"),
         descripcion_sistema=cfg_dict.get("descripcion_sistema", "Sistema de Control de Gastos & Cuentas Fiscales"),
-        logo_url=cfg_dict.get("logo_url", "")
+        logo_url=cfg_dict.get("logo_url", ""),
+        tema_color=cfg_dict.get("tema_color", "perla")
     )
 
 @app.post("/api/configuracion", response_model=ConfiguracionData)
@@ -135,7 +136,8 @@ def guardar_configuracion(data: ConfiguracionData, db: Session = Depends(get_db)
     for k, v in [
         ("nombre_sistema", data.nombre_sistema),
         ("descripcion_sistema", data.descripcion_sistema),
-        ("logo_url", data.logo_url or "")
+        ("logo_url", data.logo_url or ""),
+        ("tema_color", data.tema_color or "perla")
     ]:
         row = db.query(Configuracion).filter(Configuracion.clave == k).first()
         if row:
@@ -179,7 +181,8 @@ async def subir_fotografia_logo(file: UploadFile = File(...), db: Session = Depe
     return ConfiguracionData(
         nombre_sistema=cfg_dict.get("nombre_sistema", "Consolidado de Bancos"),
         descripcion_sistema=cfg_dict.get("descripcion_sistema", "Sistema de Control de Gastos & Cuentas Fiscales"),
-        logo_url=logo_url
+        logo_url=logo_url,
+        tema_color=cfg_dict.get("tema_color", "perla")
     )
 
 

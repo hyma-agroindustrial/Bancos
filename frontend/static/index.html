@@ -151,7 +151,6 @@
             font-size: 1.05rem !important;
             font-weight: 700 !important;
             margin-bottom: 0.45rem !important;
-            color: #f1f5f9 !important;
         }
         .modal-scaled-grande input[type="text"],
         .modal-scaled-grande input[type="number"],
@@ -202,9 +201,255 @@
             padding: 0.6rem 1.2rem !important;
             border-radius: 0.75rem !important;
         }
+
+        /* ========================================================================== */
+        /* SISTEMA DE DISEÑO PROFESIONAL: PALETAS DE COLORES CLAROS Y DESCANSO VISUAL */
+        /* ========================================================================== */
+        /* 1. Perla Ejecutivo (Claro Predeterminado - Nítido y Suave a la vista) */
+        body[data-theme="perla"] {
+            --bg-page: #eef2f6;
+            --bg-card: #ffffff;
+            --bg-subtle: #f8fafc;
+            --input-bg: #ffffff;
+            --border-color: #cbd5e1;
+            --border-input: #94a3b8;
+            --text-main: #0f172a;
+            --text-secondary: #1e293b;
+            --text-muted: #475569;
+            --text-light: #64748b;
+            --row-hover: #f1f5f9;
+        }
+
+        /* 2. Crema & Salvia Antifatiga (Tono cálido papel, 0% luz azul agresiva) */
+        body[data-theme="marfil"] {
+            --bg-page: #f0ede6;
+            --bg-card: #faf8f5;
+            --bg-subtle: #f3f0e8;
+            --input-bg: #ffffff;
+            --border-color: #cfc9bc;
+            --border-input: #a8a29e;
+            --text-main: #1c1917;
+            --text-secondary: #292524;
+            --text-muted: #57534e;
+            --text-light: #78716c;
+            --row-hover: #eae5dc;
+        }
+
+        /* 3. Azul Banca Institucional (Estilo Corporativo Financiero BBVA) */
+        body[data-theme="azul_banca"] {
+            --bg-page: #e6eef8;
+            --bg-card: #ffffff;
+            --bg-subtle: #f0f5fc;
+            --input-bg: #ffffff;
+            --border-color: #b8cde6;
+            --border-input: #7da2ce;
+            --text-main: #0a192f;
+            --text-secondary: #1e3a5f;
+            --text-muted: #334e68;
+            --text-light: #627d98;
+            --row-hover: #e8f1fb;
+        }
+
+        /* 4. Plata Alto Contraste (Bordes extra definidos y máxima nitidez) */
+        body[data-theme="pizarra"] {
+            --bg-page: #dfe6ee;
+            --bg-card: #ffffff;
+            --bg-subtle: #f1f5f9;
+            --input-bg: #ffffff;
+            --border-color: #94a3b8;
+            --border-input: #64748b;
+            --text-main: #020617;
+            --text-secondary: #0f172a;
+            --text-muted: #334155;
+            --text-light: #475569;
+            --row-hover: #e2e8f0;
+        }
+
+        /* Reglas maestras para todos los temas claros (theme-light) */
+        body.theme-light {
+            background-color: var(--bg-page) !important;
+            color: var(--text-main) !important;
+        }
+        body.theme-light header {
+            background-color: var(--bg-card) !important;
+            border-bottom: 1.5px solid var(--border-color) !important;
+            box-shadow: 0 2px 12px rgba(15, 23, 42, 0.05) !important;
+        }
+        body.theme-light .bg-slate-950,
+        body.theme-light .bg-slate-950\/95,
+        body.theme-light .bg-slate-900,
+        body.theme-light .bg-slate-900\/90 {
+            background-color: var(--bg-card) !important;
+        }
+        body.theme-light .bg-slate-900\/60,
+        body.theme-light .bg-slate-900\/50,
+        body.theme-light .bg-slate-900\/40,
+        body.theme-light .bg-slate-800,
+        body.theme-light .bg-slate-800\/80,
+        body.theme-light .bg-slate-800\/70 {
+            background-color: var(--bg-subtle) !important;
+        }
+        /* Tarjetas superiores de Cuentas Bancarias con relieve y borde nítido */
+        body.theme-light section.no-print .bg-slate-800\/80 {
+            background-color: var(--bg-card) !important;
+            border: 1.5px solid var(--border-color) !important;
+            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05) !important;
+        }
+        body.theme-light section.no-print .bg-slate-800\/80:hover {
+            border-color: #059669 !important;
+            box-shadow: 0 8px 22px rgba(5, 150, 105, 0.12) !important;
+        }
+        /* Contenedor principal de pestañas con sombra ejecutiva y borde definido */
+        body.theme-light section.print-document {
+            border: 1.5px solid var(--border-color) !important;
+            box-shadow: 0 6px 24px rgba(15, 23, 42, 0.06) !important;
+        }
+        /* Bordes generales más nítidos */
+        body.theme-light .border-slate-800,
+        body.theme-light .border-slate-800\/80,
+        body.theme-light .border-slate-700,
+        body.theme-light .border-slate-700\/80,
+        body.theme-light .border-slate-700\/60,
+        body.theme-light .border-slate-700\/40 {
+            border-color: var(--border-color) !important;
+        }
+        body.theme-light .divide-slate-800 > :not([hidden]) ~ :not([hidden]),
+        body.theme-light .divide-slate-800\/80 > :not([hidden]) ~ :not([hidden]),
+        body.theme-light .divide-slate-800\/60 > :not([hidden]) ~ :not([hidden]) {
+            border-color: var(--border-color) !important;
+        }
+        /* Tipografía oscura de alta nitidez */
+        body.theme-light .text-white,
+        body.theme-light .text-slate-100,
+        body.theme-light .text-slate-200 {
+            color: var(--text-main) !important;
+        }
+        body.theme-light .text-slate-300 {
+            color: var(--text-secondary) !important;
+        }
+        body.theme-light .text-slate-400 {
+            color: var(--text-muted) !important;
+        }
+        body.theme-light .text-slate-500 {
+            color: var(--text-light) !important;
+        }
+        /* Conservar texto blanco puro en botones de acción sólidos */
+        body.theme-light .bg-emerald-600,
+        body.theme-light .bg-emerald-500,
+        body.theme-light .bg-rose-600,
+        body.theme-light .bg-rose-500,
+        body.theme-light .bg-sky-600,
+        body.theme-light .bg-amber-600,
+        body.theme-light .bg-emerald-600 *,
+        body.theme-light .bg-emerald-500 *,
+        body.theme-light .bg-rose-600 *,
+        body.theme-light .bg-rose-500 * {
+            color: #ffffff !important;
+        }
+        /* Colores semánticos contables (Abonos, Cargos, Alertas) de alto contraste en fondo claro */
+        body.theme-light .text-emerald-400,
+        body.theme-light .text-emerald-300 {
+            color: #047857 !important;
+        }
+        body.theme-light .text-rose-400,
+        body.theme-light .text-rose-300 {
+            color: #be123c !important;
+        }
+        body.theme-light .text-amber-400,
+        body.theme-light .text-amber-300 {
+            color: #b45309 !important;
+        }
+        body.theme-light .text-sky-400,
+        body.theme-light .text-sky-300 {
+            color: #0369a1 !important;
+        }
+        /* Insignias (Badges) suaves en temas claros */
+        body.theme-light .bg-emerald-950,
+        body.theme-light .bg-emerald-950\/80,
+        body.theme-light .bg-emerald-950\/60,
+        body.theme-light .bg-emerald-950\/40,
+        body.theme-light .bg-emerald-950\/30 {
+            background-color: #ecfdf5 !important;
+            border-color: #6ee7b7 !important;
+            color: #065f46 !important;
+        }
+        body.theme-light .bg-rose-950,
+        body.theme-light .bg-rose-950\/60,
+        body.theme-light .bg-rose-950\/50,
+        body.theme-light .bg-rose-950\/40,
+        body.theme-light .bg-rose-950\/30 {
+            background-color: #fff1f2 !important;
+            border-color: #fda4af !important;
+            color: #9f1239 !important;
+        }
+        body.theme-light .bg-amber-950,
+        body.theme-light .bg-amber-950\/60,
+        body.theme-light .bg-amber-950\/40 {
+            background-color: #fffbeb !important;
+            border-color: #fcd34d !important;
+            color: #92400e !important;
+        }
+        body.theme-light .bg-sky-950 {
+            background-color: #f0f9ff !important;
+            border-color: #7dd3fc !important;
+            color: #075985 !important;
+        }
+        /* Campos de captura (Inputs, Selects, Textareas) con bordes muy nítidos */
+        body.theme-light input[type="text"],
+        body.theme-light input[type="number"],
+        body.theme-light input[type="date"],
+        body.theme-light input[type="password"],
+        body.theme-light input[type="url"],
+        body.theme-light select,
+        body.theme-light textarea {
+            background-color: var(--input-bg) !important;
+            color: var(--text-main) !important;
+            border: 1.5px solid var(--border-input) !important;
+            box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+            font-weight: 500;
+        }
+        body.theme-light input:focus,
+        body.theme-light select:focus,
+        body.theme-light textarea:focus {
+            border-color: #059669 !important;
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.20) !important;
+            outline: none !important;
+        }
+        body.theme-light input::placeholder,
+        body.theme-light textarea::placeholder {
+            color: #94a3b8 !important;
+        }
+        body.theme-light input[type="file"]::file-selector-button {
+            background-color: var(--bg-subtle) !important;
+            color: #047857 !important;
+            border: 1px solid var(--border-input) !important;
+        }
+        /* Tablas contables de alta legibilidad */
+        body.theme-light table thead {
+            background-color: var(--bg-subtle) !important;
+            border-bottom: 2px solid var(--border-input) !important;
+        }
+        body.theme-light table thead th {
+            color: var(--text-secondary) !important;
+            font-weight: 700 !important;
+        }
+        body.theme-light table tbody tr:hover {
+            background-color: var(--row-hover) !important;
+        }
+        /* Fondo de modales en modo claro */
+        body.theme-light .fixed.bg-black\/80 {
+            background-color: rgba(15, 23, 42, 0.45) !important;
+        }
+        body.theme-light .fixed > div.rounded-3xl {
+            border: 1.5px solid var(--border-input) !important;
+            box-shadow: 0 20px 50px rgba(15, 23, 42, 0.18) !important;
+        }
     </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased" x-data="agroApp()" x-init="initApp()" x-cloak>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased transition-colors duration-200"
+      :data-theme="temaColor"
+      :class="temaColor !== 'oscuro' ? 'theme-light' : 'theme-dark'"
+      x-data="agroApp()" x-init="initApp()" x-cloak>
 
     <!-- PANTALLA DE ACCESO (LOGIN POR USUARIO Y PIN) -->
     <div x-show="!usuarioActual" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-md">
@@ -1168,45 +1413,126 @@
         </section>
     </main>
 
-    <!-- MODAL: PERSONALIZAR MARCA Y ENCABEZADO -->
-    <div x-show="openModalConfiguracion" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" x-cloak>
-        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <div class="flex justify-between items-center">
-                <h3 class="text-base font-bold text-white">⚙️ Personalizar Encabezado & Marca</h3>
+    <!-- MODAL: PERSONALIZAR MARCA, TEMA DE COLORES Y ENCABEZADO -->
+    <div x-show="openModalConfiguracion" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-sm" x-cloak>
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-xl w-full p-5 sm:p-6 shadow-2xl space-y-4 overflow-y-auto max-h-[92vh]">
+            <div class="flex justify-between items-center pb-2 border-b border-slate-800">
+                <div>
+                    <h3 class="text-base font-bold text-white">⚙️ Personalizar Diseño, Colores & Marca</h3>
+                    <p class="text-xs text-slate-400">Elige una paleta de colores clara que descanse la vista y personaliza el encabezado corporativo.</p>
+                </div>
                 <button @click="openModalConfiguracion = false" class="text-slate-400 hover:text-white text-sm">✕</button>
             </div>
-            
-            <p class="text-xs text-slate-400">Cambia el título del sistema, descripción y URL del logotipo corporativo.</p>
 
-            <form @submit.prevent="guardarConfiguracion" class="space-y-3.5">
-                <div>
-                    <label class="block text-xs font-semibold text-slate-300 mb-1">Nombre o Título Principal *</label>
-                    <input type="text" x-model="configForm.nombre_sistema" required placeholder="Consolidado de Bancos" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white">
+            <form @submit.prevent="guardarConfiguracion" class="space-y-4">
+                
+                <!-- 1. PALETAS DE COLORES PROFESIONALES (DESCANSO VISUAL) -->
+                <div class="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-2.5">
+                    <label class="block text-xs font-bold text-emerald-400">🎨 Paleta de Colores & Descanso Visual (Clic para probar en vivo)</label>
+                    <p class="text-[11px] text-slate-400">Colores claros calibrados profesionalmente con bordes definidos que no cansan ni lastiman la vista:</p>
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                        <!-- Opción 1: Perla Ejecutivo -->
+                        <button type="button" @click="setTemaColor('perla')"
+                                :class="temaColor === 'perla' ? 'ring-2 ring-emerald-500 border-emerald-500 bg-emerald-950/30' : 'border-slate-700 hover:border-slate-500'"
+                                class="flex items-center gap-3 p-2.5 rounded-xl border text-left transition">
+                            <div class="flex -space-x-1 shrink-0">
+                                <span class="w-5 h-5 rounded-full border border-slate-400" style="background:#eef2f6"></span>
+                                <span class="w-5 h-5 rounded-full border border-slate-400" style="background:#ffffff"></span>
+                                <span class="w-5 h-5 rounded-full border border-slate-400" style="background:#059669"></span>
+                            </div>
+                            <div class="min-w-0">
+                                <div class="text-xs font-bold text-white">☀️ Perla Ejecutivo (Default)</div>
+                                <div class="text-[10px] text-slate-400">Blanco perla suave y bordes nítidos</div>
+                            </div>
+                        </button>
+
+                        <!-- Opción 2: Crema & Salvia Antifatiga -->
+                        <button type="button" @click="setTemaColor('marfil')"
+                                :class="temaColor === 'marfil' ? 'ring-2 ring-emerald-500 border-emerald-500 bg-emerald-950/30' : 'border-slate-700 hover:border-slate-500'"
+                                class="flex items-center gap-3 p-2.5 rounded-xl border text-left transition">
+                            <div class="flex -space-x-1 shrink-0">
+                                <span class="w-5 h-5 rounded-full border border-stone-400" style="background:#f0ede6"></span>
+                                <span class="w-5 h-5 rounded-full border border-stone-400" style="background:#faf8f5"></span>
+                                <span class="w-5 h-5 rounded-full border border-stone-400" style="background:#047857"></span>
+                            </div>
+                            <div class="min-w-0">
+                                <div class="text-xs font-bold text-white">🌿 Crema & Salvia</div>
+                                <div class="text-[10px] text-slate-400">Tono papel cálido 0% fatiga visual</div>
+                            </div>
+                        </button>
+
+                        <!-- Opción 3: Azul Banca Institucional -->
+                        <button type="button" @click="setTemaColor('azul_banca')"
+                                :class="temaColor === 'azul_banca' ? 'ring-2 ring-emerald-500 border-emerald-500 bg-emerald-950/30' : 'border-slate-700 hover:border-slate-500'"
+                                class="flex items-center gap-3 p-2.5 rounded-xl border text-left transition">
+                            <div class="flex -space-x-1 shrink-0">
+                                <span class="w-5 h-5 rounded-full border border-blue-300" style="background:#e6eef8"></span>
+                                <span class="w-5 h-5 rounded-full border border-blue-300" style="background:#ffffff"></span>
+                                <span class="w-5 h-5 rounded-full border border-blue-300" style="background:#1d4ed8"></span>
+                            </div>
+                            <div class="min-w-0">
+                                <div class="text-xs font-bold text-white">🏛️ Azul Banca Corporativo</div>
+                                <div class="text-[10px] text-slate-400">Azul hielo financiero y limpio</div>
+                            </div>
+                        </button>
+
+                        <!-- Opción 4: Plata Alto Contraste -->
+                        <button type="button" @click="setTemaColor('pizarra')"
+                                :class="temaColor === 'pizarra' ? 'ring-2 ring-emerald-500 border-emerald-500 bg-emerald-950/30' : 'border-slate-700 hover:border-slate-500'"
+                                class="flex items-center gap-3 p-2.5 rounded-xl border text-left transition">
+                            <div class="flex -space-x-1 shrink-0">
+                                <span class="w-5 h-5 rounded-full border border-slate-400" style="background:#dfe6ee"></span>
+                                <span class="w-5 h-5 rounded-full border border-slate-400" style="background:#ffffff"></span>
+                                <span class="w-5 h-5 rounded-full border border-slate-400" style="background:#0f172a"></span>
+                            </div>
+                            <div class="min-w-0">
+                                <div class="text-xs font-bold text-white">💎 Plata Alto Contraste</div>
+                                <div class="text-[10px] text-slate-400">Bordes marcados de máxima nitidez</div>
+                            </div>
+                        </button>
+
+                        <!-- Opción 5: Noche Ejecutiva -->
+                        <button type="button" @click="setTemaColor('oscuro')"
+                                :class="temaColor === 'oscuro' ? 'ring-2 ring-emerald-500 border-emerald-500 bg-emerald-950/30' : 'border-slate-700 hover:border-slate-500'"
+                                class="flex items-center gap-3 p-2.5 rounded-xl border text-left transition sm:col-span-2">
+                            <div class="flex -space-x-1 shrink-0">
+                                <span class="w-5 h-5 rounded-full border border-slate-600" style="background:#0f172a"></span>
+                                <span class="w-5 h-5 rounded-full border border-slate-600" style="background:#1e293b"></span>
+                                <span class="w-5 h-5 rounded-full border border-slate-600" style="background:#10b981"></span>
+                            </div>
+                            <div class="min-w-0">
+                                <div class="text-xs font-bold text-white">🌙 Noche Ejecutiva (Modo Oscuro)</div>
+                                <div class="text-[10px] text-slate-400">Ideal para ambientes con poca iluminación</div>
+                            </div>
+                        </button>
+                    </div>
                 </div>
 
-                <div>
-                    <label class="block text-xs font-semibold text-slate-300 mb-1">Subtítulo o Descripción *</label>
-                    <input type="text" x-model="configForm.descripcion_sistema" required placeholder="Sistema de Control de Gastos & Cuentas Fiscales" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                <!-- 2. DATOS DE MARCA -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Nombre o Título Principal *</label>
+                        <input type="text" x-model="configForm.nombre_sistema" required placeholder="Consolidado de Bancos" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Subtítulo o Descripción *</label>
+                        <input type="text" x-model="configForm.descripcion_sistema" required placeholder="Sistema de Control de Gastos & Cuentas Fiscales" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                    </div>
                 </div>
 
                 <!-- Subir Fotografía Directa desde PC o Celular -->
                 <div class="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-2">
                     <label class="block text-xs font-semibold text-emerald-400">📷 Subir Fotografía o Logotipo</label>
                     <input type="file" accept="image/*" @change="subirFotografiaLogo" class="w-full text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-500 cursor-pointer">
-                    <p class="text-[10px] text-slate-500">Importa directamente una foto desde tu equipo o galería del celular (PNG, JPG, WEBP).</p>
                     <div x-show="config.logo_url" class="flex items-center gap-2 pt-1">
                         <span class="text-[10px] text-slate-400">Logo actual:</span>
                         <img :src="config.logo_url" class="w-8 h-8 object-contain rounded border border-slate-700 bg-slate-900 p-0.5">
                     </div>
                 </div>
 
-                <div>
-                    <label class="block text-xs font-semibold text-slate-300 mb-1">O pegar URL de Imagen Externa (Opcional)</label>
-                    <input type="url" x-model="configForm.logo_url" placeholder="https://miempresa.com/logo.png" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono">
-                    <p class="text-[10px] text-slate-500 mt-1">Si lo dejas vacío, se mostrará el icono institucional predeterminado.</p>
-                </div>
-
-                <!-- Configuración de Tamaño de Ventanas y Modales -->
+                <!-- 3. Configuración de Tamaño de Ventanas y Modales -->
                 <div class="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-2">
                     <label class="block text-xs font-semibold text-emerald-400">📐 Tamaño de Ventanas de Captura y Ajustes</label>
                     <p class="text-[10px] text-slate-400">Elige el tamaño predeterminado con el que se abrirán las ventanas:</p>
@@ -1214,25 +1540,24 @@
                         <button type="button" @click="setTamanioModal('pequeno')" :class="tamanioModal === 'pequeno' ? 'bg-emerald-600 text-white font-bold border-emerald-500 shadow' : 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800'" class="p-2 text-xs rounded-xl border transition text-center">
                             <div class="text-base">📱</div>
                             <div class="text-[11px] font-bold">Pequeño</div>
-                            <div class="text-[9px] text-slate-400">Compacto</div>
+                            <div class="text-[9px] opacity-80">Compacto</div>
                         </button>
                         <button type="button" @click="setTamanioModal('normal')" :class="tamanioModal === 'normal' ? 'bg-emerald-600 text-white font-bold border-emerald-500 shadow' : 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800'" class="p-2 text-xs rounded-xl border transition text-center">
                             <div class="text-base">💻</div>
                             <div class="text-[11px] font-bold">Normal</div>
-                            <div class="text-[9px] text-slate-400">Equilibrado</div>
+                            <div class="text-[9px] opacity-80">Equilibrado</div>
                         </button>
                         <button type="button" @click="setTamanioModal('grande')" :class="tamanioModal === 'grande' ? 'bg-emerald-600 text-white font-bold border-emerald-500 shadow' : 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800'" class="p-2 text-xs rounded-xl border transition text-center">
                             <div class="text-base">🖥️</div>
                             <div class="text-[11px] font-bold">Grande</div>
-                            <div class="text-[9px] text-slate-400">Amplio</div>
+                            <div class="text-[9px] opacity-80">Doble Letra</div>
                         </button>
                     </div>
-                    <div class="text-[10px] text-slate-500 mt-1">📱 En teléfonos celulares se autoadapta siempre al 100% de la pantalla para máxima comodidad táctil.</div>
                 </div>
 
                 <div class="flex justify-end space-x-2 pt-3 border-t border-slate-800">
-                    <button type="button" @click="openModalConfiguracion = false" class="px-4 py-2 text-xs text-slate-400 hover:text-white">Cancelar</button>
-                    <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-xl">Guardar Cambios</button>
+                    <button type="button" @click="openModalConfiguracion = false" class="px-4 py-2 text-xs text-slate-400 hover:text-white">Cerrar</button>
+                    <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow">💾 Guardar Diseño y Marca</button>
                 </div>
             </form>
         </div>
@@ -1852,15 +2177,18 @@
                 loginError: '',
                 loginForm: { username: '', pin: '' },
 
+                temaColor: localStorage.getItem('hyma_tema_color') || 'perla',
                 config: {
                     nombre_sistema: 'Consolidado de Bancos',
                     descripcion_sistema: 'Sistema de Control de Gastos & Cuentas Fiscales',
-                    logo_url: ''
+                    logo_url: '',
+                    tema_color: 'perla'
                 },
                 configForm: {
                     nombre_sistema: '',
                     descripcion_sistema: '',
-                    logo_url: ''
+                    logo_url: '',
+                    tema_color: 'perla'
                 },
 
                 cuentas: [],
@@ -1995,12 +2323,24 @@
                         const res = await fetch('/api/configuracion');
                         if (res.ok) {
                             this.config = await res.json();
+                            if (!localStorage.getItem('hyma_tema_color') && this.config.tema_color) {
+                                this.temaColor = this.config.tema_color;
+                            }
                         }
                     } catch (e) {}
                 },
 
+                setTemaColor(tema) {
+                    this.temaColor = tema;
+                    this.configForm.tema_color = tema;
+                    localStorage.setItem('hyma_tema_color', tema);
+                },
+
                 abrirModalConfig() {
-                    this.configForm = { ...this.config };
+                    this.configForm = {
+                        ...this.config,
+                        tema_color: this.temaColor || this.config.tema_color || 'perla'
+                    };
                     this.openModalConfiguracion = true;
                 },
 
@@ -2036,6 +2376,7 @@
 
                 async guardarConfiguracion() {
                     try {
+                        this.configForm.tema_color = this.temaColor;
                         const res = await fetch('/api/configuracion', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -2043,8 +2384,9 @@
                         });
                         if (res.ok) {
                             this.config = await res.json();
+                            localStorage.setItem('hyma_tema_color', this.temaColor);
                             this.openModalConfiguracion = false;
-                            alert('✅ Encabezado y configuración actualizados con éxito.');
+                            alert('✅ Diseño, paleta de colores y encabezado guardados con éxito.');
                         }
                     } catch (e) {
                         alert('Error al guardar la configuración');
