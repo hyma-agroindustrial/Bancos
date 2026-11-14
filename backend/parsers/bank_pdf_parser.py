@@ -36,19 +36,28 @@ def parse_date(date_str: str, default_year: int = datetime.now().year) -> Option
         year_val = match_banorte.group(3)
         year = int(year_val) if len(year_val) == 4 else 2000 + int(year_val)
         if mes_key in MESES_ES:
-            return date(year, MESES_ES[mes_key], day)
+            try:
+                return date(year, MESES_ES[mes_key], day)
+            except ValueError:
+                return None
 
     # 2. Formato DD/MM/YYYY o DD-MM-YYYY
     match_std = re.search(r"(\d{2})[/.-](\d{2})[/.-](\d{4})", date_str)
     if match_std:
         day, month, year = map(int, match_std.groups())
-        return date(year, month, day)
+        try:
+            return date(year, month, day)
+        except ValueError:
+            return None
 
     # 3. Formato DD/MM/YY
     match_short = re.search(r"(\d{2})[/.-](\d{2})[/.-](\d{2})", date_str)
     if match_short:
         day, month, year = map(int, match_short.groups())
-        return date(2000 + year, month, day)
+        try:
+            return date(2000 + year, month, day)
+        except ValueError:
+            return None
 
     # 4. Formato DD MMM (ej: '15 ENE', '24 FEB')
     match_month_name = re.search(r"(\d{1,2})[\s/-]([A-Z]{3})", date_str)
@@ -56,15 +65,54 @@ def parse_date(date_str: str, default_year: int = datetime.now().year) -> Option
         day = int(match_month_name.group(1))
         mes_key = match_month_name.group(2)
         if mes_key in MESES_ES:
-            return date(default_year, MESES_ES[mes_key], day)
+            try:
+                return date(default_year, MESES_ES[mes_key], day)
+            except ValueError:
+                return None
 
     return None
+
+
+def _detect_statement_year(pdf) -> int:
+    """
+    Detecta automáticamente el año del estado de cuenta leyendo el encabezado/periodo
+    de las primeras páginas (ej. 'Fechadecorte 30-DIC-22', 'Periodo 08-DIC-22/30-DIC-22', 'AL 31/12/2022').
+    """
+    for page in pdf.pages[:2]:
+        text = (page.extract_text() or "").upper()
+        # 1. Buscar fecha tipo DD-MMM-YY o DD-MMM-YYYY cerca de CORTE o PERIODO
+        m_corte = re.search(
+            r"(?:CORTE|PERIODO)[^\n]{0,40}?(\d{1,2})-([A-Z]{3})-(\d{2,4})",
+            text
+        )
+        if m_corte:
+            yr_str = m_corte.group(3)
+            yr = int(yr_str) if len(yr_str) == 4 else 2000 + int(yr_str)
+            if 2000 <= yr <= 2100:
+                return yr
+
+        # 2. Buscar cualquier fecha DD-MMM-YY en el bloque superior (ej. 08-DIC-22/30-DIC-22)
+        m_any_mmm = re.search(r"(\d{1,2})-([A-Z]{3})-(\d{2,4})", text)
+        if m_any_mmm and m_any_mmm.group(2) in MESES_ES:
+            yr_str = m_any_mmm.group(3)
+            yr = int(yr_str) if len(yr_str) == 4 else 2000 + int(yr_str)
+            if 2000 <= yr <= 2100:
+                return yr
+
+        # 3. Buscar formato DD/MM/YYYY cerca de PERIODO o CORTE
+        m_slash = re.search(r"(?:CORTE|PERIODO|AL)\s*\d{1,2}[/-]\d{1,2}[/-](20\d{2})", text)
+        if m_slash:
+            return int(m_slash.group(1))
+
+    return datetime.now().year
+
 
 def generate_movement_hash(cuenta_id: int, f_date: date, monto: Decimal, tipo: str, concepto: str) -> str:
     """Genera una huella digital SHA-256 única para evitar duplicados en la base de datos."""
     normalized_concept = re.sub(r"\s+", " ", concepto.strip().upper())
     raw = f"{cuenta_id}_{f_date.isoformat()}_{monto:.2f}_{tipo}_{normalized_concept}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
 
 def _extract_banorte_words(page, cuenta_id: int, existing_hashes: set) -> List[Dict[str, Any]]:
     """
@@ -172,6 +220,197 @@ def _extract_banorte_words(page, cuenta_id: int, existing_hashes: set) -> List[D
     return movements
 
 
+def _extract_scotiabank_words(
+    page,
+    cuenta_id: int,
+    existing_hashes: set,
+    statement_year: int
+) -> List[Dict[str, Any]]:
+    """
+    Extractor posicional de alta precisión para estados de cuenta Scotiabank Inverlat.
+    Detecta columnas Fecha | Concepto | Origen/Referencia | Depósito | Retiro | Saldo,
+    agrupa descripciones multilínea y separa con exactitud abonos (Depósito) y cargos (Retiro).
+    """
+    words = page.extract_words()
+    if not words:
+        return []
+
+    # Localizar fila de encabezados de tabla ('Depósito' / 'Retiro' / 'Saldo')
+    dep_header = next(
+        (w for w in words if w['text'].upper().startswith("DEP") and "SITO" in w['text'].upper()),
+        None
+    )
+    ret_header = next(
+        (w for w in words if w['text'].upper() == "RETIRO"),
+        None
+    )
+    sal_header = next(
+        (w for w in words if w['text'].upper() == "SALDO" and w['x0'] > 480),
+        None
+    )
+
+    if not dep_header and not ret_header:
+        return []
+
+    header_top = (dep_header or ret_header)['top']
+
+    # Rangos horizontales de cada columna en Scotiabank
+    col_concepto_min = 85.0
+    col_concepto_max = 250.0
+    col_ref_min = 250.0
+    col_ref_max = 372.0
+    col_deposito = (
+        (dep_header['x0'] - 20, dep_header['x1'] + 28)
+        if dep_header else (372.0, 452.0)
+    )
+    col_retiro = (
+        (ret_header['x0'] - 20, ret_header['x1'] + 32)
+        if ret_header else (452.0, 525.0)
+    )
+    col_saldo = (
+        (sal_header['x0'] - 20, sal_header['x1'] + 45)
+        if sal_header else (525.0, 605.0)
+    )
+
+    # Detectar el límite inferior donde termina la tabla de movimientos (pie legal o totales)
+    footer_keywords = (
+        "LASTASAS", "LAS", "ENELCASO", "LOSSIGUIENTES", "CODIES",
+        "TOTALDECOMISIONES", "SIINVIERTES", "\"PARA", "“PARA"
+    )
+    footer_top = 750.0
+    for w in words:
+        if w['top'] > header_top + 15 and w['x0'] < 120:
+            txt_up = w['text'].upper()
+            if any(txt_up.startswith(fk) for fk in footer_keywords):
+                # Evitar falsos positivos si "LAS" está dentro del concepto (verificar x0 < 55)
+                if txt_up == "LAS" and w['x0'] > 55:
+                    continue
+                footer_top = min(footer_top, w['top'])
+                break
+
+    # Localizar cada movimiento por par (Día en x0≈50..68, Mes en x0≈62..86) en la misma línea
+    day_candidates = [
+        w for w in words
+        if header_top + 4 < w['top'] < footer_top
+        and 48 <= w['x0'] <= 70
+        and re.match(r"^\d{1,2}$", w['text'])
+    ]
+
+    date_entries = []
+    for dw in day_candidates:
+        day_num = int(dw['text'])
+        if not (1 <= day_num <= 31):
+            continue
+        # Buscar el mes (ENE..DIC) en la misma coordenada vertical
+        mw = next(
+            (
+                w for w in words
+                if abs(w['top'] - dw['top']) <= 3.0
+                and 60 <= w['x0'] <= 88
+                and w['text'].upper() in MESES_ES
+            ),
+            None
+        )
+        if not mw:
+            continue
+
+        mes_num = MESES_ES[mw['text'].upper()]
+        try:
+            mov_date = date(statement_year, mes_num, day_num)
+        except ValueError:
+            continue
+
+        date_entries.append({
+            "date": mov_date,
+            "top": dw['top'],
+            "bottom": dw['bottom']
+        })
+
+    if not date_entries:
+        return []
+
+    movements: List[Dict[str, Any]] = []
+
+    for i, de in enumerate(date_entries):
+        top_bound = de['top'] - 2.0
+        next_row_top = date_entries[i + 1]['top'] - 2.0 if i + 1 < len(date_entries) else (footer_top - 2.0)
+        bottom_bound = min(next_row_top, footer_top - 2.0, de['top'] + 75.0)
+
+        row_words = [w for w in words if top_bound <= w['top'] < bottom_bound]
+
+        # Concepto: todas las líneas dentro de la columna Concepto (85 <= x0 < 250)
+        concept_words = [
+            w['text'] for w in row_words
+            if col_concepto_min <= w['x0'] < col_concepto_max
+        ]
+        concept_clean = re.sub(r"\s+", " ", " ".join(concept_words)).strip()
+
+        if not concept_clean or "SALDO ANTERIOR" in concept_clean.upper():
+            continue
+
+        # Origen / Referencia: palabras dentro de la columna Referencia (250 <= x0 < 372)
+        ref_words = [
+            w['text'] for w in row_words
+            if col_ref_min <= w['x0'] < col_ref_max
+        ]
+        referencia = " ".join(ref_words).strip()
+
+        # Si el concepto tiene un RFC/folio en líneas secundarias y no hubo referencia explícita
+        if not referencia:
+            ref_match = re.search(r"\b(\d{10,20})\b", concept_clean)
+            if ref_match:
+                referencia = ref_match.group(1)
+
+        # Montos monetarios: se encuentran en la primera línea del movimiento
+        deposito_amt = None
+        retiro_amt = None
+        saldo_amt = None
+
+        for w in row_words:
+            # Solo evaluar montos en la línea principal del movimiento (evita ruido)
+            if abs(w['top'] - de['top']) <= 8.0 and ("." in w['text'] or "$" in w['text']):
+                # Evitar porcentajes como '16.00%'
+                if "%" in w['text']:
+                    continue
+                amt = clean_amount(w['text'])
+                if amt is not None:
+                    x_mid = (w['x0'] + w['x1']) / 2.0
+                    if col_deposito[0] <= x_mid <= col_deposito[1]:
+                        deposito_amt = amt
+                    elif col_retiro[0] <= x_mid <= col_retiro[1]:
+                        retiro_amt = amt
+                    elif col_saldo[0] <= x_mid <= col_saldo[1]:
+                        saldo_amt = amt
+
+        if deposito_amt is not None and deposito_amt > 0:
+            tipo = "ENTRADA"
+            monto = deposito_amt
+        elif retiro_amt is not None and retiro_amt > 0:
+            tipo = "SALIDA"
+            monto = retiro_amt
+        else:
+            continue
+
+        # Incluir referencia en el hash para distinguir movimientos idénticos del mismo día con distinto folio
+        hash_concept = f"{concept_clean} {referencia}".strip() if referencia else concept_clean
+        m_hash = generate_movement_hash(cuenta_id, de['date'], monto, tipo, hash_concept)
+
+        movements.append({
+            "fecha": de['date'],
+            "concepto": concept_clean[:250],
+            "referencia": referencia[:100],
+            "cargo": monto if tipo == "SALIDA" else None,
+            "abono": monto if tipo == "ENTRADA" else None,
+            "tipo": tipo,
+            "monto": monto,
+            "saldo_resultante": saldo_amt,
+            "hash_deduplicacion": m_hash,
+            "es_duplicado": m_hash in existing_hashes
+        })
+
+    return movements
+
+
 def extract_movements_from_pdf(
     file_bytes: bytes, 
     cuenta_id: int, 
@@ -179,18 +418,20 @@ def extract_movements_from_pdf(
 ) -> List[Dict[str, Any]]:
     """
     Motor híbrido inteligente de extracción multibanco (Banorte, Scotiabank, BBVA, Santander, etc.):
-    1) Si detecta formato Banorte (Enlace Negocios / Detalle de Movimientos), usa extracción posicional.
-    2) Si detecta tablas estructuradas estándar, extrae por celdas tabulares.
-    3) Si es texto libre, aplica heurística de expresiones regulares multibanco.
+    1) Detecta automáticamente el año del periodo del estado de cuenta.
+    2) Si detecta formato Banorte o Scotiabank, usa extracción posicional de alta precisión por coordenadas X/Y.
+    3) Si detecta tablas estructuradas estándar, extrae por celdas tabulares.
+    4) Si es texto libre, aplica heurística de expresiones regulares multibanco con soporte de signo '$' y cálculo de saldos.
     """
     movements: List[Dict[str, Any]] = []
-    current_year = datetime.now().year
 
     with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
-        # A) PROBAR ESTRATEGIA 1: BANORTE / POSICIONAL
+        current_year = _detect_statement_year(pdf)
+
+        # A1) ESTRATEGIA 1A: BANORTE POSICIONAL
         for page in pdf.pages:
             text = page.extract_text() or ""
-            if "DETALLE DE MOVIMIENTOS" in text and ("BANORTE" in text.upper() or "ENLACE NEGOCIOS" in text.upper()):
+            if "DETALLE DE MOVIMIENTOS" in text.upper() and ("BANORTE" in text.upper() or "ENLACE NEGOCIOS" in text.upper()):
                 banorte_movs = _extract_banorte_words(page, cuenta_id, existing_hashes)
                 if banorte_movs:
                     movements.extend(banorte_movs)
@@ -198,7 +439,24 @@ def extract_movements_from_pdf(
         if movements:
             return movements
 
-        # B) ESTRATEGIA 2: TABLAS NATIVAS (Scotiabank, BBVA, etc.)
+        # A2) ESTRATEGIA 1B: SCOTIABANK POSICIONAL
+        for page in pdf.pages:
+            text = page.extract_text() or ""
+            text_up = text.upper()
+            if (
+                "SCOTIABANK" in text_up
+                or "DETALLEDETUSMOVIMIENTOS" in text_up
+                or "DETALLE DE TUS MOVIMIENTOS" in text_up
+                or ("ORIGEN/REFERENCIA" in text_up and "RETIRO" in text_up)
+            ):
+                scotia_movs = _extract_scotiabank_words(page, cuenta_id, existing_hashes, current_year)
+                if scotia_movs:
+                    movements.extend(scotia_movs)
+
+        if movements:
+            return movements
+
+        # B) ESTRATEGIA 2: TABLAS NATIVAS (BBVA, Santander, Banamex, etc.)
         for page in pdf.pages:
             tables = page.extract_tables()
             table_extracted = False
@@ -219,7 +477,7 @@ def extract_movements_from_pdf(
                     idx_fecha = next((i for i, h in enumerate(headers) if "FECHA" in h or "DIA" in h), 0)
                     idx_concepto = next((i for i, h in enumerate(headers) if any(k in h for k in ["CONCEPTO", "DESCRIPCION", "DETALLE"])), 1)
                     idx_cargo = next((i for i, h in enumerate(headers) if any(k in h for k in ["CARGO", "RETIRO", "SALIDA", "DEBITO"])), None)
-                    idx_abono = next((i for i, h in enumerate(headers) if any(k in h for k in ["ABONO", "DEPOSITO", "ENTRADA", "CREDITO"])), None)
+                    idx_abono = next((i for i, h in enumerate(headers) if any(k in h for k in ["ABONO", "DEPOSITO", "DEPÓSITO", "ENTRADA", "CREDITO"])), None)
                     idx_saldo = next((i for i, h in enumerate(headers) if "SALDO" in h), None)
 
                     for row in table[header_row + 1:]:
@@ -266,16 +524,18 @@ def extract_movements_from_pdf(
                         })
                         table_extracted = True
 
-            # C) ESTRATEGIA 3: REGEX LÍNEA POR LÍNEA MULTIBANCO
+            # C) ESTRATEGIA 3: REGEX LÍNEA POR LÍNEA MULTIBANCO (con soporte de signo '$' y delta de saldos)
             if not table_extracted:
                 text = page.extract_text()
                 if not text:
                     continue
 
                 line_regex = re.compile(
-                    r"^(\d{2}[/-]\d{2}(?:[/-]\d{2,4})?|\d{1,2}\s+[A-Z]{3}|\d{1,2}-[A-Z]{3}-\d{2,4})\s+(.+?)\s+([\d,]+\.\d{2})(?:\s+([\d,]+\.\d{2}))?",
-                    re.IGNORECASE | re.MULTILINE
+                    r"^(\d{2}[/-]\d{2}(?:[/-]\d{2,4})?|\d{1,2}\s+[A-Z]{3}|\d{1,2}-[A-Z]{3}-\d{2,4})\s+(.+?)\s+\$?\s*([\d,]+\.\d{2})(?:\s+\$?\s*([\d,]+\.\d{2}))?$",
+                    re.IGNORECASE
                 )
+
+                prev_saldo: Optional[Decimal] = None
 
                 for line in text.split("\n"):
                     match = line_regex.search(line.strip())
@@ -293,17 +553,28 @@ def extract_movements_from_pdf(
 
                         con_upper = concepto_str.upper()
                         if "SALDO ANTERIOR" in con_upper:
+                            prev_saldo = amt2 or amt1
                             continue
 
-                        es_salida = any(w in con_upper for w in ["RETIRO", "CARGO", "COMPRA", "COMISION", "PAGO", "TRANSFERENCIA SPEI ENVIADA", "SPEI A "])
-                        es_entrada = any(w in con_upper for w in ["ABONO", "DEPOSITO", "DEPOSITO EN EFECTIVO", "SPEI RECIBIDO", "NOMINA"])
-
-                        if es_entrada:
-                            tipo = "ENTRADA"
-                        elif es_salida:
-                            tipo = "SALIDA"
+                        # Determinar si es ENTRADA o SALIDA usando diferencia de saldo si está disponible
+                        if amt2 is not None and prev_saldo is not None:
+                            if abs((prev_saldo + amt1) - amt2) <= Decimal("0.05"):
+                                tipo = "ENTRADA"
+                            elif abs((prev_saldo - amt1) - amt2) <= Decimal("0.05"):
+                                tipo = "SALIDA"
+                            else:
+                                es_entrada = any(w in con_upper for w in ["ABONO", "DEPOSITO", "DEPÓSITO", "SPEI RECIBIDO", "NOMINA"])
+                                tipo = "ENTRADA" if es_entrada else "SALIDA"
                         else:
-                            tipo = "SALIDA"
+                            es_salida = any(w in con_upper for w in ["RETIRO", "CARGO", "COMPRA", "COMISION", "PAGO", "TRANSFERENCIA SPEI ENVIADA", "SPEI A "])
+                            es_entrada = any(w in con_upper for w in ["ABONO", "DEPOSITO", "DEPÓSITO", "DEPOSITO EN EFECTIVO", "SPEI RECIBIDO", "NOMINA"])
+                            if es_entrada and not es_salida:
+                                tipo = "ENTRADA"
+                            else:
+                                tipo = "SALIDA"
+
+                        if amt2 is not None:
+                            prev_saldo = amt2
 
                         monto = amt1
                         m_hash = generate_movement_hash(cuenta_id, m_date, monto, tipo, concepto_str)

@@ -670,7 +670,8 @@ async def extraer_movimientos_pdf(
 
     movimientos = extract_movements_from_pdf(content, cuenta_id, existing_hashes)
 
-    cats = db.query(Categoria).all()
+    cats = db.query(Categoria).filter(Categoria.activo == True).all()
+    entidades_db = db.query(Entidad).filter(Entidad.activo == True).all()
     gas_cat = next((c.id for c in cats if "GASOLINA" in c.nombre.upper() or "DIESEL" in c.nombre.upper()), None)
     cli_cat = next((c.id for c in cats if "CLIENTE" in c.nombre.upper()), None)
     sat_cat = next((c.id for c in cats if "IMPUESTO" in c.nombre.upper() or "SAT" in c.nombre.upper()), None)
@@ -694,16 +695,23 @@ async def extraer_movimientos_pdf(
             m["categoria_id_sugerida"] = cfe_cat
         elif any(w in conc for w in ["TELCEL", "TELMEX", "TOTALPLAY", "AT&T", "INTERNET"]):
             m["categoria_id_sugerida"] = tel_cat
+        elif any(w in conc for w in ["COMISION", "MEMBRESIA", "ORDEN DE PAGO SPEI", "TRANSFERENCIA - ENVIO", "ANUALIDAD", "DISPERSION DE FONDOS"]):
+            m["categoria_id_sugerida"] = com_cat
         elif any(w in conc for w in ["SAT", "IMPUESTO", "TESORERIA", "IMSS"]):
             m["categoria_id_sugerida"] = sat_cat
-        elif any(w in conc for w in ["COMISION", "MEMBRESIA", "ORDEN DE PAGO SPEI", "TRANSFERENCIA - ENVIO"]):
-            m["categoria_id_sugerida"] = com_cat
-        elif any(w in conc for w in ["TRASPASO", "SCOTIA", "SCOTIABANK"]):
+        elif any(w in conc for w in ["TRASPASO", "SWEB TRASPASO"]):
             m["categoria_id_sugerida"] = trasp_cat
         elif any(w in conc for w in ["TOYOTA", "CAM TOYOTA", "REFACCION"]):
             m["categoria_id_sugerida"] = refac_cat
         elif m["tipo"] == "ENTRADA":
             m["categoria_id_sugerida"] = cli_cat
+
+        # Sugerir entidad si el nombre aparece en el concepto
+        for ent in entidades_db:
+            ent_nom = (ent.nombre or "").strip().upper()
+            if len(ent_nom) >= 4 and ent_nom in conc:
+                m["entidad_id_sugerida"] = ent.id
+                break
 
     return movimientos
 

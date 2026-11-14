@@ -276,6 +276,16 @@ class MovimientoExtraido(BaseModel):
     categoria_id_sugerida: Optional[int] = None
     entidad_id_sugerida: Optional[int] = None
 
+    @field_validator("categoria_id_sugerida", "entidad_id_sugerida", mode="before")
+    @classmethod
+    def parse_optional_sugerida_id(cls, v: Any) -> Optional[int]:
+        if v == "" or v is None or v == "null":
+            return None
+        try:
+            return int(v)
+        except (ValueError, TypeError):
+            return None
+
 class BatchImportConfirm(BaseModel):
     cuenta_id: int
     archivo_nombre: str

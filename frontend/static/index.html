@@ -809,47 +809,78 @@
                 </div>
 
                 <!-- TABLA DE MOVIMIENTOS EXTRAÍDOS -->
-                <div x-show="movimientosExtraidos.length > 0" class="space-y-3">
-                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                <div x-show="movimientosExtraidos.length > 0" class="space-y-4">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-900/60 border border-slate-800 rounded-xl p-3.5">
                         <div>
-                            <h4 class="text-sm font-bold text-white">Movimientos Extraídos del PDF</h4>
-                            <p class="text-xs text-slate-400">Verifica la clasificación de categorías antes de guardarlos.</p>
+                            <h4 class="text-sm font-bold text-white">Movimientos Extraídos del PDF (<span x-text="movimientosExtraidos.length"></span>)</h4>
+                            <p class="text-xs text-slate-400">Verifica o ajusta concepto, categoría fiscal y beneficiario antes de importar.</p>
                         </div>
-                        <button @click="guardarLotePdf" :disabled="loading" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition">
-                            💾 Confirmar e Importar (<span x-text="movimientosExtraidos.filter(m => !m.es_duplicado).length"></span>)
-                        </button>
+                        <div class="flex flex-wrap items-center gap-3">
+                            <div class="text-xs px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800">
+                                <span class="text-slate-400">Abonos:</span>
+                                <span class="font-mono font-bold text-emerald-400 ml-1" x-text="formatMoney(movimientosExtraidos.filter(m => !m.es_duplicado && m.tipo === 'ENTRADA').reduce((acc, m) => acc + Number(m.monto || 0), 0))"></span>
+                            </div>
+                            <div class="text-xs px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800">
+                                <span class="text-slate-400">Cargos:</span>
+                                <span class="font-mono font-bold text-rose-400 ml-1" x-text="formatMoney(movimientosExtraidos.filter(m => !m.es_duplicado && m.tipo === 'SALIDA').reduce((acc, m) => acc + Number(m.monto || 0), 0))"></span>
+                            </div>
+                            <button @click="guardarLotePdf" :disabled="loading || movimientosExtraidos.filter(m => !m.es_duplicado).length === 0" class="bg-emerald-600 disabled:opacity-40 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-md">
+                                💾 Confirmar e Importar (<span x-text="movimientosExtraidos.filter(m => !m.es_duplicado).length"></span>)
+                            </button>
+                        </div>
                     </div>
 
                     <div class="overflow-x-auto border border-slate-800 rounded-xl">
                         <table class="w-full text-left text-xs text-slate-300">
                             <thead class="bg-slate-900 text-slate-400 uppercase font-semibold text-[10px]">
                                 <tr>
-                                    <th class="p-3">Estado</th>
+                                    <th class="p-3">Importar</th>
                                     <th class="p-3">Fecha</th>
-                                    <th class="p-3">Concepto</th>
+                                    <th class="p-3">Concepto & Referencia</th>
                                     <th class="p-3">Tipo</th>
                                     <th class="p-3">Monto</th>
-                                    <th class="p-3">Categoría</th>
+                                    <th class="p-3">Categoría Fiscal</th>
+                                    <th class="p-3">Beneficiario / Empresa</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-800/80">
                                 <template x-for="(m, idx) in movimientosExtraidos" :key="idx">
-                                    <tr :class="m.es_duplicado ? 'bg-rose-950/20 opacity-60' : 'hover:bg-slate-900/50'">
+                                    <tr :class="m.es_duplicado ? 'bg-rose-950/10 opacity-60' : 'hover:bg-slate-900/50'">
                                         <td class="p-3">
-                                            <span x-show="m.es_duplicado" class="px-2 py-0.5 rounded text-[10px] bg-rose-900 text-rose-300 font-bold">Duplicado</span>
-                                            <span x-show="!m.es_duplicado" class="px-2 py-0.5 rounded text-[10px] bg-emerald-950 text-emerald-300 font-bold">Nuevo</span>
+                                            <label class="inline-flex items-center gap-1.5 cursor-pointer">
+                                                <input type="checkbox" :checked="!m.es_duplicado" @change="m.es_duplicado = !$event.target.checked" class="rounded border-slate-700 text-emerald-600 focus:ring-emerald-500">
+                                                <span x-show="m.es_duplicado" class="px-2 py-0.5 rounded text-[10px] bg-rose-900 text-rose-300 font-bold">Omitir</span>
+                                                <span x-show="!m.es_duplicado" class="px-2 py-0.5 rounded text-[10px] bg-emerald-950 text-emerald-300 font-bold">Importar</span>
+                                            </label>
                                         </td>
-                                        <td class="p-3 font-mono" x-text="m.fecha"></td>
-                                        <td class="p-3 font-medium text-white max-w-xs truncate" x-text="m.concepto"></td>
-                                        <td class="p-3">
-                                            <span :class="m.tipo === 'ENTRADA' ? 'text-emerald-400' : 'text-rose-400'" class="font-bold" x-text="m.tipo"></span>
+                                        <td class="p-3 font-mono whitespace-nowrap" x-text="m.fecha"></td>
+                                        <td class="p-3 min-w-[220px]">
+                                            <input type="text" x-model="m.concepto" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white font-medium mb-1">
+                                            <div class="flex items-center gap-1 text-[10px] text-slate-400">
+                                                <span>Ref:</span>
+                                                <input type="text" x-model="m.referencia" placeholder="Sin referencia" class="bg-transparent border-b border-slate-700 px-1 py-0.5 text-[10px] text-slate-300 w-40">
+                                            </div>
                                         </td>
-                                        <td class="p-3 font-mono font-bold" :class="m.tipo === 'ENTRADA' ? 'text-emerald-400' : 'text-rose-400'" x-text="formatMoney(m.monto)"></td>
                                         <td class="p-3">
-                                            <select x-model="m.categoria_id_sugerida" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white">
+                                            <select x-model="m.tipo" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs font-bold" :class="m.tipo === 'ENTRADA' ? 'text-emerald-400' : 'text-rose-400'">
+                                                <option value="ENTRADA">ENTRADA (+)</option>
+                                                <option value="SALIDA">SALIDA (-)</option>
+                                            </select>
+                                        </td>
+                                        <td class="p-3 font-mono font-bold whitespace-nowrap" :class="m.tipo === 'ENTRADA' ? 'text-emerald-400' : 'text-rose-400'" x-text="formatMoney(m.monto)"></td>
+                                        <td class="p-3">
+                                            <select x-model="m.categoria_id_sugerida" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white w-44">
                                                 <option value="">Sin categoría...</option>
                                                 <template x-for="cat in categorias" :key="cat.id">
                                                     <option :value="cat.id" x-text="cat.nombre"></option>
+                                                </template>
+                                            </select>
+                                        </td>
+                                        <td class="p-3">
+                                            <select x-model="m.entidad_id_sugerida" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white w-44">
+                                                <option value="">(Ninguno / Opcional)</option>
+                                                <template x-for="ent in entidades" :key="ent.id">
+                                                    <option :value="ent.id" x-text="ent.nombre"></option>
                                                 </template>
                                             </select>
                                         </td>
@@ -3085,10 +3116,16 @@
                 async guardarLotePdf() {
                     this.loading = true;
                     try {
+                        const cuentaDestinoId = parseInt(this.pdfCuentaId);
+                        const movimientosSanitizados = this.movimientosExtraidos.map(m => ({
+                            ...m,
+                            categoria_id_sugerida: m.categoria_id_sugerida ? parseInt(m.categoria_id_sugerida) : null,
+                            entidad_id_sugerida: m.entidad_id_sugerida ? parseInt(m.entidad_id_sugerida) : null
+                        }));
                         const payload = {
-                            cuenta_id: parseInt(this.pdfCuentaId),
-                            archivo_nombre: this.pdfFile.name,
-                            movimientos: this.movimientosExtraidos
+                            cuenta_id: cuentaDestinoId,
+                            archivo_nombre: this.pdfFile ? this.pdfFile.name : 'estado_cuenta.pdf',
+                            movimientos: movimientosSanitizados
                         };
                         const res = await fetch('/api/transacciones/batch-import', {
                             method: 'POST',
@@ -3100,9 +3137,15 @@
                             alert(data.message);
                             this.movimientosExtraidos = [];
                             this.pdfFile = null;
+                            this.filtros.cuenta_id = String(cuentaDestinoId);
+                            this.filtros.fecha_inicio = '';
+                            this.filtros.fecha_fin = '';
                             await this.cargarCuentas();
                             await this.filtrarTransacciones();
                             this.activeTab = 'reportes';
+                        } else {
+                            const err = await res.json().catch(() => ({}));
+                            alert(err.detail || 'Error al importar los movimientos del PDF.');
                         }
                     } finally {
                         this.loading = false;
