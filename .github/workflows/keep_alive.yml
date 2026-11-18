@@ -1,0 +1,16 @@
+name: Keep-Alive 24/7 (Render + Supabase)
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping /api/health en Render y Supabase PostgreSQL
+        run: |
+          curl -fsS --max-time 30 https://bancos-9yfp.onrender.com/api/health
+          echo ""
+          echo "Keep-alive exitoso."

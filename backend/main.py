@@ -63,6 +63,24 @@ def hash_pin(pin: str) -> str:
 @app.on_event("startup")
 def startup_seed_data():
     ensure_buckets_exist()
+    # Iniciar hilo Keep-Alive 24/7 en la nube para evitar suspensión en Render Free y Supabase
+    if not IS_SQLITE:
+        import threading
+        import time
+        import urllib.request
+
+        def _keep_alive_worker():
+            target_url = os.getenv("RENDER_EXTERNAL_URL", "https://bancos-9yfp.onrender.com").rstrip("/") + "/api/health"
+            while True:
+                time.sleep(600)  # Cada 10 minutos
+                try:
+                    with urllib.request.urlopen(target_url, timeout=15) as _:
+                        pass
+                except Exception:
+                    pass
+
+        threading.Thread(target=_keep_alive_worker, daemon=True).start()
+
     db = next(get_db())
     try:
         # 0. Migración segura de columnas nuevas en SQLite
@@ -1482,7 +1500,7 @@ frontend_dir = os.path.join(os.path.dirname(__file__), "..", "frontend", "static
 if os.path.exists(frontend_dir):
     app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
 
-    @app.get("/")
+    @app.api_route("/", methods=["GET", "HEAD"])
     def index():
         response = FileResponse(os.path.join(frontend_dir, "index.html"))
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
