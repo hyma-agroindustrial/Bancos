@@ -707,9 +707,9 @@
                 </button>
 
                 <!-- Botón Respaldo Base de Datos (Solo ADMIN) -->
-                <a x-show="usuarioActual && usuarioActual.rol === 'ADMIN'" href="/api/backup/download" title="Descargar copia de respaldo de la base de datos contable" class="text-xs bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 p-2 sm:px-2.5 sm:py-2 rounded-lg font-bold transition flex items-center gap-1">
+                <a x-show="usuarioActual && usuarioActual.rol === 'ADMIN'" href="/api/backup/download" download title="Descargar copia de respaldo de la base de datos contable" class="text-xs bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 p-2 sm:px-2.5 sm:py-2 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer shadow-sm">
                     <span>💾</span>
-                    <span class="hidden lg:inline">Respaldo</span>
+                    <span class="hidden lg:inline">Respaldo BD</span>
                 </a>
 
                 <!-- Badge Usuario Actual & Logout -->

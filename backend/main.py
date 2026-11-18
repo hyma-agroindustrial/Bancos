@@ -14,7 +14,15 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, text
 from typing import List, Optional, Dict
 
-from .database import engine, Base, get_db
+from .database import engine, Base, get_db, IS_SQLITE
+from .cloud_storage import (
+    ensure_buckets_exist,
+    is_cloud_storage_enabled,
+    save_estado_cuenta_pdf,
+    resolve_or_fetch_estado_cuenta_pdf,
+    remove_estado_cuenta_pdf,
+    save_branding_image,
+)
 from .models import (
     Cuenta, Categoria, Entidad, Transaccion, Usuario, Configuracion,
     EstadoCuentaArchivo, ReglaClasificacion, CierreMes
@@ -54,19 +62,21 @@ def hash_pin(pin: str) -> str:
 # SEED DATA AL INICIO
 @app.on_event("startup")
 def startup_seed_data():
+    ensure_buckets_exist()
     db = next(get_db())
     try:
         # 0. Migración segura de columnas nuevas en SQLite
-        for col_sql in [
-            "ALTER TABLE transacciones ADD COLUMN estatus_factura VARCHAR(20) DEFAULT 'PENDIENTE'",
-            "ALTER TABLE transacciones ADD COLUMN usuario_registro VARCHAR(80)",
-            "ALTER TABLE transacciones ADD COLUMN traspaso_vinculado_id INTEGER"
-        ]:
-            try:
-                db.execute(text(col_sql))
-                db.commit()
-            except Exception:
-                db.rollback()
+        if IS_SQLITE:
+            for col_sql in [
+                "ALTER TABLE transacciones ADD COLUMN estatus_factura VARCHAR(20) DEFAULT 'PENDIENTE'",
+                "ALTER TABLE transacciones ADD COLUMN usuario_registro VARCHAR(80)",
+                "ALTER TABLE transacciones ADD COLUMN traspaso_vinculado_id INTEGER"
+            ]:
+                try:
+                    db.execute(text(col_sql))
+                    db.commit()
+                except Exception:
+                    db.rollback()
 
         # 1. Seed Configuración del Encabezado (Nombre, Descripción, Logo)
         cfg_defaults = {
@@ -133,6 +143,20 @@ def startup_seed_data():
 
 
 # ====================================================================================================
+# MONITOR DE SALUD Y KEEP-ALIVE 24/7 (PARA RENDER FREE Y SUPABASE)
+# ====================================================================================================
+@app.get("/api/health")
+def health_check(db: Session = Depends(get_db)):
+    db.execute(text("SELECT 1"))
+    return {
+        "status": "ok",
+        "database": "sqlite" if IS_SQLITE else "postgresql",
+        "cloud_storage": is_cloud_storage_enabled(),
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+# ====================================================================================================
 # CONFIGURACIÓN PERSONALIZABLE DE MARCA (NOMBRE, LOGO, DESCRIPCIÓN)
 # ====================================================================================================
 @app.get("/api/configuracion", response_model=ConfiguracionData)
@@ -173,16 +197,9 @@ async def subir_fotografia_logo(file: UploadFile = File(...), db: Session = Depe
         raise HTTPException(status_code=400, detail="Formato de imagen no soportado. Sube un archivo PNG, JPG o WEBP.")
 
     uploads_dir = os.path.join(os.path.dirname(__file__), "..", "frontend", "static", "uploads")
-    os.makedirs(uploads_dir, exist_ok=True)
-
     clean_filename = f"logo_{secrets.token_hex(4)}{ext}"
-    file_path = os.path.join(uploads_dir, clean_filename)
-
     content = await file.read()
-    with open(file_path, "wb") as f:
-        f.write(content)
-
-    logo_url = f"/static/uploads/{clean_filename}"
+    logo_url = save_branding_image(clean_filename, content, ext, uploads_dir)
 
     row = db.query(Configuracion).filter(Configuracion.clave == "logo_url").first()
     if row:
@@ -585,26 +602,40 @@ def aprender_regla_clasificacion(
     categoria_id: Optional[int],
     entidad_id: Optional[int]
 ):
-    if not categoria_id and not entidad_id:
-        return
-    patron = extraer_patron_aprendizaje(concepto)
-    if not patron or len(patron) < 4:
-        return
-    # Evitar guardar patrones genéricos de traspaso que cambian de destino
-    if patron in ("SPEI", "TRANSFERENCIA", "ABONO", "CARGO"):
-        return
-    regla = db.query(ReglaClasificacion).filter(ReglaClasificacion.patron == patron).first()
-    if regla:
-        if categoria_id is not None:
-            regla.categoria_id = categoria_id
-        if entidad_id is not None:
-            regla.entidad_id = entidad_id
-    else:
-        db.add(ReglaClasificacion(
-            patron=patron,
-            categoria_id=categoria_id,
-            entidad_id=entidad_id
-        ))
+    try:
+        if not categoria_id and not entidad_id:
+            return
+        patron = extraer_patron_aprendizaje(concepto)
+        if not patron or len(patron) < 4:
+            return
+        # Evitar guardar patrones genéricos de traspaso que cambian de destino
+        if patron in ("SPEI", "TRANSFERENCIA", "ABONO", "CARGO"):
+            return
+
+        # 1. Verificar si ya fue agregado en la sesión pendiente (evita colisiones intra-lote UNIQUE)
+        for obj in list(db.new):
+            if isinstance(obj, ReglaClasificacion) and obj.patron == patron:
+                if categoria_id is not None:
+                    obj.categoria_id = categoria_id
+                if entidad_id is not None:
+                    obj.entidad_id = entidad_id
+                return
+
+        # 2. Buscar en la base de datos
+        regla = db.query(ReglaClasificacion).filter(ReglaClasificacion.patron == patron).first()
+        if regla:
+            if categoria_id is not None:
+                regla.categoria_id = categoria_id
+            if entidad_id is not None:
+                regla.entidad_id = entidad_id
+        else:
+            db.add(ReglaClasificacion(
+                patron=patron,
+                categoria_id=categoria_id,
+                entidad_id=entidad_id
+            ))
+    except Exception:
+        pass
 
 def inferir_estatus_factura_default(concepto: str, categoria_nombre: Optional[str] = None) -> str:
     c_up = (concepto or "").upper()
@@ -1003,9 +1034,7 @@ def confirmar_importacion_lote(payload: BatchImportConfirm, db: Session = Depend
         ).first()
         if not ya_archivado:
             clean_filename = f"edo_{payload.cuenta_id}_{anio_edo}_{int(mes_edo):02d}_{secrets.token_hex(4)}.pdf"
-            file_path = os.path.join(STORAGE_EDOS_DIR, clean_filename)
-            with open(file_path, "wb") as f:
-                f.write(pdf_bytes)
+            file_path = save_estado_cuenta_pdf(clean_filename, pdf_bytes, STORAGE_EDOS_DIR)
             nuevo_archivo = EstadoCuentaArchivo(
                 cuenta_id=payload.cuenta_id,
                 anio=anio_edo,
@@ -1019,7 +1048,12 @@ def confirmar_importacion_lote(payload: BatchImportConfirm, db: Session = Depend
             db.add(nuevo_archivo)
             archivado_msg = f" El PDF fue archivado automáticamente en Estados de Cuenta ({NOMBRE_MESES_CORTO.get(mes_edo, mes_edo)} {anio_edo})."
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error al guardar los movimientos: {str(e)}")
+
     return {"message": f"✅ Proceso completado: {insertados} movimientos importados, {ignorados} omitidos por duplicidad.{archivado_msg}"}
 
 
@@ -1241,17 +1275,83 @@ def guardar_conciliacion_cierre_mes(payload: ConciliacionCierrePayload, db: Sess
     }
 
 @app.get("/api/backup/download")
-def descargar_respaldo_bd():
-    db_path = os.path.join(os.path.dirname(__file__), "..", "bancos.db")
-    if not os.path.exists(db_path):
-        db_path = os.path.join(os.path.dirname(__file__), "bancos.db")
-    if not os.path.exists(db_path):
-        raise HTTPException(status_code=404, detail="Archivo de base de datos no localizado.")
-    hoy_str = date.today().isoformat()
+def descargar_respaldo_bd(db: Session = Depends(get_db)):
+    import sqlite3
+    import tempfile
+    from sqlalchemy import create_engine as sa_create_engine
+    from sqlalchemy.orm import sessionmaker as sa_sessionmaker
+    from starlette.background import BackgroundTask
+
+    hoy_str = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    backup_filename = f"Respaldo_Control_Bancos_{hoy_str}.db"
+    temp_dir = tempfile.gettempdir()
+    temp_path = os.path.join(temp_dir, f"backup_{secrets.token_hex(4)}_{backup_filename}")
+
+    if IS_SQLITE:
+        posibles_rutas = [
+            os.path.join(os.path.dirname(__file__), "..", "hyma_fiscal.db"),
+            os.path.join(os.path.dirname(__file__), "hyma_fiscal.db"),
+            os.path.abspath("hyma_fiscal.db"),
+            os.path.join(os.path.dirname(__file__), "..", "bancos.db"),
+            os.path.join(os.path.dirname(__file__), "bancos.db"),
+            os.path.abspath("bancos.db")
+        ]
+        db_path = None
+        for cand in posibles_rutas:
+            if os.path.exists(cand) and os.path.getsize(cand) > 0:
+                db_path = os.path.abspath(cand)
+                break
+
+        if not db_path:
+            raise HTTPException(status_code=404, detail="Archivo de base de datos no localizado.")
+
+        try:
+            src = sqlite3.connect(db_path)
+            dst = sqlite3.connect(temp_path)
+            with dst:
+                src.backup(dst)
+            dst.close()
+            src.close()
+            download_path = temp_path
+            cleanup_needed = True
+        except Exception:
+            download_path = db_path
+            cleanup_needed = False
+    else:
+        # En modo PostgreSQL (Nube), exporta todas las tablas a un archivo SQLite .db portable al vuelo
+        tmp_engine = sa_create_engine(f"sqlite:///{temp_path}", connect_args={"check_same_thread": False})
+        Base.metadata.create_all(bind=tmp_engine)
+        TmpSession = sa_sessionmaker(autocommit=False, autoflush=False, bind=tmp_engine)
+        tmp_db = TmpSession()
+        try:
+            for model_cls in [
+                Configuracion, Usuario, Cuenta, Categoria, Entidad,
+                ReglaClasificacion, Transaccion, CierreMes, EstadoCuentaArchivo
+            ]:
+                rows = db.query(model_cls).all()
+                for row in rows:
+                    data = {col.name: getattr(row, col.name) for col in model_cls.__table__.columns}
+                    tmp_db.add(model_cls(**data))
+                tmp_db.commit()
+        finally:
+            tmp_db.close()
+            tmp_engine.dispose()
+        download_path = temp_path
+        cleanup_needed = True
+
+    def cleanup():
+        if cleanup_needed:
+            try:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+            except Exception:
+                pass
+
     return FileResponse(
-        path=db_path,
-        filename=f"Respaldo_Control_Bancos_{hoy_str}.db",
-        media_type="application/octet-stream"
+        path=download_path,
+        filename=backup_filename,
+        media_type="application/octet-stream",
+        background=BackgroundTask(cleanup) if cleanup_needed else None
     )
 
 # ====================================================================================================
@@ -1281,11 +1381,8 @@ async def subir_archivo_estado_cuenta(
         raise HTTPException(status_code=400, detail="Únicamente se permiten archivos PDF del Estado de Cuenta Bancario.")
 
     clean_filename = f"edo_{cuenta_id}_{anio}_{int(mes):02d}_{secrets.token_hex(4)}.pdf"
-    file_path = os.path.join(STORAGE_EDOS_DIR, clean_filename)
-
     content = await file.read()
-    with open(file_path, "wb") as f:
-        f.write(content)
+    file_path = save_estado_cuenta_pdf(clean_filename, content, STORAGE_EDOS_DIR)
 
     nuevo_archivo = EstadoCuentaArchivo(
         cuenta_id=cuenta_id,
@@ -1339,11 +1436,14 @@ def descargar_archivo_estado_cuenta(archivo_id: int, db: Session = Depends(get_d
     if not archivo:
         raise HTTPException(status_code=404, detail="Archivo de estado de cuenta no encontrado.")
 
-    if not os.path.exists(archivo.ruta_archivo):
-        raise HTTPException(status_code=404, detail="El archivo físico no se encuentra en el servidor.")
+    resolved_path = resolve_or_fetch_estado_cuenta_pdf(
+        archivo.nombre_archivo_almacenado, archivo.ruta_archivo, STORAGE_EDOS_DIR
+    )
+    if not resolved_path:
+        raise HTTPException(status_code=404, detail="El archivo físico no se encuentra en el servidor ni en la bóveda en la nube.")
 
     return FileResponse(
-        path=archivo.ruta_archivo,
+        path=resolved_path,
         filename=archivo.nombre_archivo_original,
         media_type="application/pdf"
     )
@@ -1354,11 +1454,14 @@ def ver_archivo_estado_cuenta_inline(archivo_id: int, db: Session = Depends(get_
     if not archivo:
         raise HTTPException(status_code=404, detail="Archivo de estado de cuenta no encontrado.")
 
-    if not os.path.exists(archivo.ruta_archivo):
-        raise HTTPException(status_code=404, detail="El archivo físico no se encuentra en el servidor.")
+    resolved_path = resolve_or_fetch_estado_cuenta_pdf(
+        archivo.nombre_archivo_almacenado, archivo.ruta_archivo, STORAGE_EDOS_DIR
+    )
+    if not resolved_path:
+        raise HTTPException(status_code=404, detail="El archivo físico no se encuentra en el servidor ni en la bóveda en la nube.")
 
     return FileResponse(
-        path=archivo.ruta_archivo,
+        path=resolved_path,
         media_type="application/pdf"
     )
 
@@ -1368,11 +1471,7 @@ def eliminar_archivo_estado_cuenta(archivo_id: int, db: Session = Depends(get_db
     if not archivo:
         raise HTTPException(status_code=404, detail="Archivo no encontrado.")
 
-    try:
-        if os.path.exists(archivo.ruta_archivo):
-            os.remove(archivo.ruta_archivo)
-    except Exception:
-        pass
+    remove_estado_cuenta_pdf(archivo.nombre_archivo_almacenado, archivo.ruta_archivo, STORAGE_EDOS_DIR)
 
     db.delete(archivo)
     db.commit()

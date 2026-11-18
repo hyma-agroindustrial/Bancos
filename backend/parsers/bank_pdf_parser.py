@@ -443,6 +443,153 @@ def _extract_scotiabank_words(
     return movements
 
 
+def _extract_bbva_words(
+    page,
+    cuenta_id: int,
+    existing_hashes: set,
+    statement_year: int
+) -> List[Dict[str, Any]]:
+    """
+    Extractor posicional de alta precisión para estados de cuenta BBVA (Maestra PyME / Empresas / Personas).
+    BBVA no utiliza bordes de tabla; sus movimientos se estructuran en columnas:
+    FECHA OPER | FECHA LIQ | COD | DESCRIPCIÓN | REFERENCIA | CARGOS | ABONOS | OPERACIÓN | LIQUIDACIÓN
+    """
+    words = page.extract_words()
+    if not words:
+        return []
+
+    # Localizar encabezados CARGOS y ABONOS alineados en la misma fila de la tabla (x0 > 300)
+    cargos_candidates = [
+        w for w in words
+        if w['text'].upper() == "CARGOS" and 330 <= w['x0'] <= 390
+    ]
+
+    header_pair = None
+    for cw in cargos_candidates:
+        aw = next(
+            (w for w in words if w['text'].upper() == "ABONOS" and 400 <= w['x0'] <= 460 and abs(w['top'] - cw['top']) <= 2.5),
+            None
+        )
+        if aw:
+            header_pair = (cw, aw)
+            break
+
+    if not header_pair:
+        return []
+
+    cargos_hdr, abonos_hdr = header_pair
+    header_top = cargos_hdr['top']
+    col_cargo = (cargos_hdr['x0'] - 25, cargos_hdr['x1'] + 25)
+    col_abono = (abonos_hdr['x0'] - 20, abonos_hdr['x1'] + 30)
+    col_saldo = (abonos_hdr['x1'] + 30, 615.0)
+
+    # Detectar el corte de fin de tabla (totales, avisos al cliente o pie institucional)
+    footer_top = 750.0
+    for w in words:
+        if w['top'] > header_top + 12:
+            txt_up = w['text'].upper()
+            if any(txt_up.startswith(k) for k in ["TOTAL", "ESTIMADO", "CUADRO", "GLOSARIO"]):
+                footer_top = min(footer_top, w['top'])
+            elif w['top'] > 740 and "BBVA" in txt_up:
+                footer_top = min(footer_top, w['top'])
+
+    # Formato de fecha en BBVA: DD/MMM (ej. 18/NOV, 02/JUN)
+    date_regex = re.compile(r"^(\d{2})/([A-Z]{3})$")
+
+    # Localizar cada movimiento por la columna FECHA OPER (x0 < 45)
+    date_candidates = [
+        w for w in words
+        if header_top + 4 < w['top'] < footer_top
+        and w['x0'] < 45
+        and date_regex.match(w['text'].upper())
+    ]
+
+    date_entries = []
+    for dw in date_candidates:
+        m = date_regex.match(dw['text'].upper())
+        day = int(m.group(1))
+        mes_str = m.group(2)
+        if mes_str in MESES_ES:
+            try:
+                mov_date = date(statement_year, MESES_ES[mes_str], day)
+                date_entries.append({
+                    "date": mov_date,
+                    "top": dw['top'],
+                    "bottom": dw['bottom']
+                })
+            except ValueError:
+                continue
+
+    if not date_entries:
+        return []
+
+    movements: List[Dict[str, Any]] = []
+
+    for i, de in enumerate(date_entries):
+        top_bound = de['top'] - 2.0
+        next_top = date_entries[i + 1]['top'] - 2.0 if i + 1 < len(date_entries) else footer_top
+        bottom_bound = min(next_top, footer_top, de['top'] + 100.0)
+
+        row_words = [w for w in words if top_bound <= w['top'] < bottom_bound]
+
+        # Concepto y referencia: palabras entre x0 >= 80 y la columna de cargos
+        concept_words = [w['text'] for w in row_words if 80 <= w['x0'] < col_cargo[0]]
+        concept_raw = re.sub(r"\s+", " ", " ".join(concept_words)).strip()
+
+        if not concept_raw or "SALDO ANTERIOR" in concept_raw.upper():
+            continue
+
+        # Montos monetarios: ubicados en la primera línea de la fecha
+        cargo_amt = None
+        abono_amt = None
+        saldo_amt = None
+
+        for w in row_words:
+            if "." in w['text']:
+                amt = clean_amount(w['text'])
+                if amt is not None:
+                    x_mid = (w['x0'] + w['x1']) / 2.0
+                    # Evaluar únicamente en la línea principal de la fecha
+                    if abs(w['top'] - de['top']) <= 5.0:
+                        if col_cargo[0] <= x_mid < col_cargo[1]:
+                            cargo_amt = amt
+                        elif col_abono[0] <= x_mid < col_abono[1]:
+                            abono_amt = amt
+                        elif col_saldo[0] <= x_mid < col_saldo[1] and saldo_amt is None:
+                            saldo_amt = amt
+
+        if cargo_amt is not None and cargo_amt > 0:
+            tipo = "SALIDA"
+            monto = cargo_amt
+        elif abono_amt is not None and abono_amt > 0:
+            tipo = "ENTRADA"
+            monto = abono_amt
+        else:
+            continue  # Omite líneas informativas sin monto (ej. APERTURA DE CUENTA)
+
+        # Extraer referencia explícita (ej. 'Ref. 6310776463' o folios)
+        ref_match = re.search(r"Ref\.?\s*([A-Za-z0-9-]+)", concept_raw, re.IGNORECASE)
+        referencia = ref_match.group(1) if ref_match else ""
+
+        hash_concept = f"{concept_raw} {referencia}".strip() if referencia else concept_raw
+        m_hash = generate_movement_hash(cuenta_id, de['date'], monto, tipo, hash_concept)
+
+        movements.append({
+            "fecha": de['date'],
+            "concepto": concept_raw[:250],
+            "referencia": referencia[:100],
+            "cargo": cargo_amt,
+            "abono": abono_amt,
+            "tipo": tipo,
+            "monto": monto,
+            "saldo_resultante": saldo_amt,
+            "hash_deduplicacion": m_hash,
+            "es_duplicado": m_hash in existing_hashes
+        })
+
+    return movements
+
+
 def extract_movements_from_pdf(
     file_bytes: bytes, 
     cuenta_id: int, 
@@ -486,6 +633,23 @@ def extract_movements_from_pdf(
                     movements.extend(scotia_movs)
 
         if movements:
+            return _disambiguate_intra_pdf_hashes(movements, cuenta_id, existing_hashes)
+
+        # A3) ESTRATEGIA 1C: BBVA POSICIONAL (Maestra PyME, Cuentas BBVA)
+        for page in pdf.pages:
+            text = page.extract_text() or ""
+            text_up = text.upper()
+            if (
+                "BBVA" in text_up
+                or "MAESTRA PYME" in text_up
+                or ("CARGOS" in text_up and "ABONOS" in text_up and "OPER" in text_up and "LIQ" in text_up)
+            ):
+                bbva_movs = _extract_bbva_words(page, cuenta_id, existing_hashes, current_year)
+                if bbva_movs:
+                    movements.extend(bbva_movs)
+
+        if movements:
+            return _disambiguate_intra_pdf_hashes(movements, cuenta_id, existing_hashes)
             return _disambiguate_intra_pdf_hashes(movements, cuenta_id, existing_hashes)
 
         # B) ESTRATEGIA 2: TABLAS NATIVAS (BBVA, Santander, Banamex, etc.)
