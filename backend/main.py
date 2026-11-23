@@ -6,7 +6,8 @@ import secrets
 import calendar
 from datetime import datetime, date
 from decimal import Decimal
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Query, Header
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Query, Header, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -14,7 +15,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, text
 from typing import List, Optional, Dict
 
-from .database import engine, Base, get_db, IS_SQLITE
+from .database import engine, Base, get_db, IS_SQLITE, SessionLocal
 from .cloud_storage import (
     ensure_buckets_exist,
     is_cloud_storage_enabled,
@@ -58,6 +59,97 @@ app.add_middleware(
 
 def hash_pin(pin: str) -> str:
     return hashlib.sha256(f"hyma_bancos_salt_{pin}".encode("utf-8")).hexdigest()
+
+
+# ====================================================================================================
+# CONTROL DE ACCESO EN EL SERVIDOR (sesión obligatoria, roles y alcance por cuenta bancaria)
+#   ADMIN    -> acceso total.
+#   OPERADOR -> captura y consulta SOLO en sus cuentas asignadas.
+#   CONSULTA -> solo lectura en sus cuentas asignadas (ver, reportes, descargar). No captura ni modifica.
+# ====================================================================================================
+ROLES_VALIDOS = ("ADMIN", "OPERADOR", "CONSULTA")
+_METODOS_ESCRITURA = {"POST", "PUT", "PATCH", "DELETE"}
+_RUTAS_PUBLICAS = {
+    ("POST", "/api/auth/login"),
+    ("GET", "/api/health"),
+    ("HEAD", "/api/health"),
+    ("GET", "/api/configuracion"),
+}
+
+
+def _rol_de(u) -> str:
+    return str(getattr(u, "rol", "") or "OPERADOR").upper()
+
+
+def _ids_cuentas_de(u) -> set:
+    try:
+        return {int(x) for x in json.loads(getattr(u, "cuentas_permitidas", None) or "[]")}
+    except Exception:
+        return set()
+
+
+def _ruta_solo_admin(method: str, path: str) -> bool:
+    if path.startswith("/api/usuarios") or path.startswith("/api/backup"):
+        return True
+    if path.startswith("/api/configuracion") and method != "GET":
+        return True
+    if path.startswith("/api/cuentas") and method in _METODOS_ESCRITURA:
+        return True
+    if method == "DELETE" and path.startswith(("/api/categorias", "/api/entidades", "/api/archivos-estado-cuenta")):
+        return True
+    return False
+
+
+@app.middleware("http")
+async def control_de_acceso(request: Request, call_next):
+    path = request.url.path
+    method = request.method.upper()
+    if not path.startswith("/api/") or method == "OPTIONS" or (method, path) in _RUTAS_PUBLICAS:
+        return await call_next(request)
+
+    auth = request.headers.get("authorization") or ""
+    token = auth.replace("Bearer ", "").strip() or (request.query_params.get("token") or "").strip()
+    if not token:
+        return JSONResponse({"detail": "Sesión requerida. Inicia sesión de nuevo."}, status_code=401)
+
+    db = SessionLocal()
+    try:
+        user = db.query(Usuario).filter(Usuario.token_sesion == token, Usuario.activo == True).first()
+        if user is not None:
+            db.expunge(user)
+    finally:
+        db.close()
+    if user is None:
+        return JSONResponse({"detail": "Sesión inválida o expirada. Inicia sesión de nuevo."}, status_code=401)
+
+    rol = _rol_de(user)
+    if rol != "ADMIN":
+        if _ruta_solo_admin(method, path):
+            return JSONResponse({"detail": "Esta acción es exclusiva del Administrador."}, status_code=403)
+        if rol == "CONSULTA" and method in _METODOS_ESCRITURA:
+            return JSONResponse({"detail": "Tu usuario es de SOLO LECTURA: puedes consultar y descargar, pero no capturar ni modificar."}, status_code=403)
+
+    request.state.usuario = user
+    return await call_next(request)
+
+
+def _alcance_cuentas(request: Request) -> Optional[set]:
+    """None = sin restricción (ADMIN). Un set = IDs de cuentas a las que el usuario tiene acceso."""
+    u = getattr(request.state, "usuario", None)
+    if u is None or _rol_de(u) == "ADMIN":
+        return None
+    return _ids_cuentas_de(u)
+
+
+def _exigir_cuenta(request: Request, cuenta_id) -> None:
+    alcance = _alcance_cuentas(request)
+    if alcance is not None and (cuenta_id is None or int(cuenta_id) not in alcance):
+        raise HTTPException(status_code=403, detail="No tienes acceso a esta cuenta bancaria.")
+
+
+def _usuario_actual(request: Request) -> Optional[str]:
+    u = getattr(request.state, "usuario", None)
+    return u.username if u is not None else None
 
 # SEED DATA AL INICIO
 @app.on_event("startup")
@@ -327,8 +419,11 @@ def eliminar_usuario(usuario_id: int, db: Session = Depends(get_db)):
 # 1. GESTIÓN DE CUENTAS BANCARIAS (MODIFICACIÓN Y ELIMINACIÓN)
 # ====================================================================================================
 @app.get("/api/cuentas", response_model=List[CuentaResponse])
-def listar_cuentas(db: Session = Depends(get_db)):
+def listar_cuentas(request: Request, db: Session = Depends(get_db)):
     cuentas = db.query(Cuenta).filter(Cuenta.activo == True).all()
+    alcance = _alcance_cuentas(request)
+    if alcance is not None:
+        cuentas = [c for c in cuentas if c.id in alcance]
     resultado = []
     
     for c in cuentas:
@@ -674,12 +769,17 @@ def listar_transacciones(
     fecha_inicio: Optional[date] = None,
     fecha_fin: Optional[date] = None,
     limit: int = 2000,
+    request: Request = None,
     db: Session = Depends(get_db)
 ):
     query = db.query(Transaccion)
-    
+    alcance = _alcance_cuentas(request)
+
     if cuenta_id:
+        _exigir_cuenta(request, cuenta_id)
         query = query.filter(Transaccion.cuenta_id == cuenta_id)
+    elif alcance is not None:
+        query = query.filter(Transaccion.cuenta_id.in_(alcance or [-1]))
     if categoria_id:
         query = query.filter(Transaccion.categoria_id == categoria_id)
     if entidad_id:
@@ -710,7 +810,10 @@ def listar_transacciones(
     return resultado
 
 @app.post("/api/transacciones", response_model=TransaccionResponse)
-def crear_transaccion_manual(trans: TransaccionCreate, db: Session = Depends(get_db)):
+def crear_transaccion_manual(trans: TransaccionCreate, request: Request, db: Session = Depends(get_db)):
+    _exigir_cuenta(request, trans.cuenta_id)
+    if _usuario_actual(request):
+        trans.usuario_registro = _usuario_actual(request)
     cuenta = db.query(Cuenta).filter(Cuenta.id == trans.cuenta_id).first()
     if not cuenta:
         raise HTTPException(status_code=404, detail="Cuenta bancaria no encontrada.")
@@ -769,11 +872,12 @@ def crear_transaccion_manual(trans: TransaccionCreate, db: Session = Depends(get
     return tr_dict
 
 @app.put("/api/transacciones/{transaccion_id}", response_model=TransaccionResponse)
-def modificar_transaccion(transaccion_id: int, datos: TransaccionUpdate, db: Session = Depends(get_db)):
+def modificar_transaccion(transaccion_id: int, datos: TransaccionUpdate, request: Request, db: Session = Depends(get_db)):
     """Permite modificar fecha, monto, concepto, categoría, cuenta, estatus CFDI o beneficiario de un movimiento existente."""
     t = db.query(Transaccion).filter(Transaccion.id == transaccion_id).first()
     if not t:
         raise HTTPException(status_code=404, detail="Movimiento no encontrado.")
+    _exigir_cuenta(request, t.cuenta_id)
 
     verificar_mes_cerrado(db, t.cuenta_id, t.fecha)
 
@@ -781,6 +885,9 @@ def modificar_transaccion(transaccion_id: int, datos: TransaccionUpdate, db: Ses
         cta = db.query(Cuenta).filter(Cuenta.id == datos.cuenta_id).first()
         if not cta:
             raise HTTPException(status_code=404, detail="Cuenta bancaria no válida.")
+        _exigir_cuenta(request, datos.cuenta_id)
+        if int(datos.cuenta_id) != int(t.cuenta_id):
+            verificar_mes_cerrado(db, datos.cuenta_id, datos.fecha or t.fecha)
         t.cuenta_id = datos.cuenta_id
 
     # Manejar actualización de categoría y entidad (incluyendo si se desasigna)
@@ -810,6 +917,19 @@ def modificar_transaccion(transaccion_id: int, datos: TransaccionUpdate, db: Ses
     if datos.usuario_registro is not None:
         t.usuario_registro = datos.usuario_registro
 
+    # Traspaso espejo: mantener la contrapartida idéntica (mismo monto/fecha, tipo opuesto) para no descuadrar la otra cuenta
+    if t.traspaso_vinculado_id:
+        espejo = db.query(Transaccion).filter(Transaccion.id == t.traspaso_vinculado_id).first()
+        if espejo is not None:
+            verificar_mes_cerrado(db, espejo.cuenta_id, espejo.fecha)
+            if datos.fecha is not None:
+                verificar_mes_cerrado(db, espejo.cuenta_id, datos.fecha)
+            espejo.monto = t.monto
+            espejo.fecha = t.fecha
+            espejo.tipo = "ENTRADA" if t.tipo == "SALIDA" else "SALIDA"
+            if datos.referencia is not None:
+                espejo.referencia = t.referencia
+
     aprender_regla_clasificacion(db, t.concepto, t.categoria_id, t.entidad_id)
     db.commit()
     db.refresh(t)
@@ -823,10 +943,11 @@ def modificar_transaccion(transaccion_id: int, datos: TransaccionUpdate, db: Ses
     return tr_dict
 
 @app.patch("/api/transacciones/{transaccion_id}/factura")
-def cambiar_estatus_factura(transaccion_id: int, estatus_factura: str = Query(...), db: Session = Depends(get_db)):
+def cambiar_estatus_factura(transaccion_id: int, request: Request, estatus_factura: str = Query(...), db: Session = Depends(get_db)):
     t = db.query(Transaccion).filter(Transaccion.id == transaccion_id).first()
     if not t:
         raise HTTPException(status_code=404, detail="Movimiento no encontrado.")
+    _exigir_cuenta(request, t.cuenta_id)
     if estatus_factura not in ("FACTURADO", "PENDIENTE", "NO_APLICA"):
         raise HTTPException(status_code=400, detail="Estatus de factura inválido.")
     t.estatus_factura = estatus_factura
@@ -834,10 +955,14 @@ def cambiar_estatus_factura(transaccion_id: int, estatus_factura: str = Query(..
     return {"id": t.id, "estatus_factura": t.estatus_factura}
 
 @app.post("/api/transacciones/bulk-update")
-def edicion_masiva_transacciones(payload: BulkTransaccionUpdate, db: Session = Depends(get_db)):
+def edicion_masiva_transacciones(payload: BulkTransaccionUpdate, request: Request, db: Session = Depends(get_db)):
     if not payload.ids:
         raise HTTPException(status_code=400, detail="Selecciona al menos un movimiento.")
     registros = db.query(Transaccion).filter(Transaccion.id.in_(payload.ids)).all()
+    for t in registros:
+        _exigir_cuenta(request, t.cuenta_id)
+    if _usuario_actual(request):
+        payload.usuario_registro = _usuario_actual(request)
     actualizados = 0
     for t in registros:
         verificar_mes_cerrado(db, t.cuenta_id, t.fecha)
@@ -855,15 +980,23 @@ def edicion_masiva_transacciones(payload: BulkTransaccionUpdate, db: Session = D
     return {"message": f"✅ Se actualizaron {actualizados} movimientos correctamente.", "actualizados": actualizados}
 
 @app.delete("/api/transacciones/{transaccion_id}")
-def eliminar_transaccion(transaccion_id: int, db: Session = Depends(get_db)):
-    """Elimina permanentemente una transacción de la base de datos."""
+def eliminar_transaccion(transaccion_id: int, request: Request, db: Session = Depends(get_db)):
+    """Elimina permanentemente una transacción (y su contrapartida si es un traspaso espejo)."""
     t = db.query(Transaccion).filter(Transaccion.id == transaccion_id).first()
     if not t:
         raise HTTPException(status_code=404, detail="Movimiento no encontrado.")
+    _exigir_cuenta(request, t.cuenta_id)
     verificar_mes_cerrado(db, t.cuenta_id, t.fecha)
+    espejo = None
+    if t.traspaso_vinculado_id:
+        espejo = db.query(Transaccion).filter(Transaccion.id == t.traspaso_vinculado_id).first()
+        if espejo is not None:
+            verificar_mes_cerrado(db, espejo.cuenta_id, espejo.fecha)
     db.delete(t)
+    if espejo is not None:
+        db.delete(espejo)
     db.commit()
-    return {"message": "Movimiento eliminado exitosamente."}
+    return {"message": "Movimiento eliminado exitosamente." + (" También se eliminó su contrapartida del traspaso." if espejo is not None else "")}
 
 
 # ====================================================================================================
@@ -875,10 +1008,12 @@ PENDING_PDF_UPLOADS: Dict[str, bytes] = {}
 
 @app.post("/api/transacciones/upload-pdf", response_model=List[MovimientoExtraido])
 async def extraer_movimientos_pdf(
+    request: Request,
     cuenta_id: int = Form(...),
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
+    _exigir_cuenta(request, cuenta_id)
     cuenta = db.query(Cuenta).filter(Cuenta.id == cuenta_id).first()
     if not cuenta:
         raise HTTPException(status_code=404, detail="Cuenta bancaria especificada no existe.")
@@ -968,7 +1103,10 @@ async def extraer_movimientos_pdf(
     return movimientos
 
 @app.post("/api/transacciones/batch-import")
-def confirmar_importacion_lote(payload: BatchImportConfirm, db: Session = Depends(get_db)):
+def confirmar_importacion_lote(payload: BatchImportConfirm, request: Request, db: Session = Depends(get_db)):
+    _exigir_cuenta(request, payload.cuenta_id)
+    if _usuario_actual(request):
+        payload.usuario_registro = _usuario_actual(request)
     insertados = 0
     ignorados = 0
 
@@ -1086,11 +1224,16 @@ def reporte_financiero_global(
     tipo: Optional[str] = None,
     fecha_inicio: Optional[date] = None,
     fecha_fin: Optional[date] = None,
+    request: Request = None,
     db: Session = Depends(get_db)
 ):
     query = db.query(Transaccion)
+    alcance = _alcance_cuentas(request)
     if cuenta_id:
+        _exigir_cuenta(request, cuenta_id)
         query = query.filter(Transaccion.cuenta_id == cuenta_id)
+    elif alcance is not None:
+        query = query.filter(Transaccion.cuenta_id.in_(alcance or [-1]))
     if categoria_id:
         query = query.filter(Transaccion.categoria_id == categoria_id)
     if entidad_id:
@@ -1123,8 +1266,10 @@ def generar_estado_cuenta_mensual(
     cuenta_id: int,
     mes: int = Query(..., ge=1, le=12),
     anio: int = Query(..., ge=2000, le=2100),
+    request: Request = None,
     db: Session = Depends(get_db)
 ):
+    _exigir_cuenta(request, cuenta_id)
     """
     Genera un Estado de Cuenta Oficial / Corte Mensual al estilo bancario (Banorte, Scotiabank, BBVA)
     con Saldo Inicial acumulado al 1° del mes, saldo progresivo renglón por renglón,
@@ -1261,7 +1406,12 @@ def generar_estado_cuenta_mensual(
     }
 
 @app.post("/api/reportes/corte-mes/conciliacion")
-def guardar_conciliacion_cierre_mes(payload: ConciliacionCierrePayload, db: Session = Depends(get_db)):
+def guardar_conciliacion_cierre_mes(payload: ConciliacionCierrePayload, request: Request, db: Session = Depends(get_db)):
+    _exigir_cuenta(request, payload.cuenta_id)
+    if payload.cerrado is not None and _alcance_cuentas(request) is not None:
+        raise HTTPException(status_code=403, detail="Solo el Administrador puede cerrar o reabrir un mes contable.")
+    if _usuario_actual(request):
+        payload.usuario = _usuario_actual(request)
     cierre = db.query(CierreMes).filter(
         CierreMes.cuenta_id == payload.cuenta_id,
         CierreMes.anio == payload.anio,
@@ -1380,6 +1530,7 @@ os.makedirs(STORAGE_EDOS_DIR, exist_ok=True)
 
 @app.post("/api/archivos-estado-cuenta", response_model=EstadoCuentaArchivoResponse)
 async def subir_archivo_estado_cuenta(
+    request: Request,
     cuenta_id: int = Form(...),
     anio: int = Form(...),
     mes: int = Form(...),
@@ -1387,6 +1538,7 @@ async def subir_archivo_estado_cuenta(
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
+    _exigir_cuenta(request, cuenta_id)
     cuenta = db.query(Cuenta).filter(Cuenta.id == cuenta_id).first()
     if not cuenta:
         raise HTTPException(status_code=404, detail="Cuenta bancaria no encontrada.")
@@ -1427,11 +1579,16 @@ def listar_archivos_estado_cuenta(
     cuenta_id: Optional[int] = None,
     anio: Optional[int] = None,
     mes: Optional[int] = None,
+    request: Request = None,
     db: Session = Depends(get_db)
 ):
     query = db.query(EstadoCuentaArchivo).join(Cuenta, EstadoCuentaArchivo.cuenta_id == Cuenta.id)
+    alcance = _alcance_cuentas(request)
     if cuenta_id:
+        _exigir_cuenta(request, cuenta_id)
         query = query.filter(EstadoCuentaArchivo.cuenta_id == cuenta_id)
+    elif alcance is not None:
+        query = query.filter(EstadoCuentaArchivo.cuenta_id.in_(alcance or [-1]))
     if anio:
         query = query.filter(EstadoCuentaArchivo.anio == anio)
     if mes:
@@ -1449,10 +1606,11 @@ def listar_archivos_estado_cuenta(
     return resultado
 
 @app.get("/api/archivos-estado-cuenta/{archivo_id}/descargar")
-def descargar_archivo_estado_cuenta(archivo_id: int, db: Session = Depends(get_db)):
+def descargar_archivo_estado_cuenta(archivo_id: int, request: Request, db: Session = Depends(get_db)):
     archivo = db.query(EstadoCuentaArchivo).filter(EstadoCuentaArchivo.id == archivo_id).first()
     if not archivo:
         raise HTTPException(status_code=404, detail="Archivo de estado de cuenta no encontrado.")
+    _exigir_cuenta(request, archivo.cuenta_id)
 
     resolved_path = resolve_or_fetch_estado_cuenta_pdf(
         archivo.nombre_archivo_almacenado, archivo.ruta_archivo, STORAGE_EDOS_DIR
@@ -1467,10 +1625,11 @@ def descargar_archivo_estado_cuenta(archivo_id: int, db: Session = Depends(get_d
     )
 
 @app.get("/api/archivos-estado-cuenta/{archivo_id}/ver")
-def ver_archivo_estado_cuenta_inline(archivo_id: int, db: Session = Depends(get_db)):
+def ver_archivo_estado_cuenta_inline(archivo_id: int, request: Request, db: Session = Depends(get_db)):
     archivo = db.query(EstadoCuentaArchivo).filter(EstadoCuentaArchivo.id == archivo_id).first()
     if not archivo:
         raise HTTPException(status_code=404, detail="Archivo de estado de cuenta no encontrado.")
+    _exigir_cuenta(request, archivo.cuenta_id)
 
     resolved_path = resolve_or_fetch_estado_cuenta_pdf(
         archivo.nombre_archivo_almacenado, archivo.ruta_archivo, STORAGE_EDOS_DIR

@@ -20,7 +20,7 @@ class UsuarioCreate(BaseModel):
     username: str = Field(..., max_length=50)
     nombre: str = Field(..., max_length=100)
     pin: str = Field(..., min_length=4, max_length=8)
-    rol: Optional[str] = Field(default="OPERADOR", pattern="^(ADMIN|OPERADOR)$")
+    rol: Optional[str] = Field(default="OPERADOR", pattern="^(ADMIN|OPERADOR|CONSULTA)$")
     cuentas_permitidas: Optional[List[int]] = Field(default_factory=list)
 
     @field_validator("pin")
@@ -34,7 +34,7 @@ class UsuarioCreate(BaseModel):
 class UsuarioUpdate(BaseModel):
     nombre: Optional[str] = Field(None, max_length=100)
     pin: Optional[str] = Field(None, min_length=4, max_length=8)
-    rol: Optional[str] = Field(None, pattern="^(ADMIN|OPERADOR)$")
+    rol: Optional[str] = Field(None, pattern="^(ADMIN|OPERADOR|CONSULTA)$")
     activo: Optional[bool] = None
     cuentas_permitidas: Optional[List[int]] = None
 
