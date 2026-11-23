@@ -41,6 +41,7 @@ from .schemas import (
     UsuarioLogin, UsuarioCreate, UsuarioUpdate, UsuarioResponse, AuthResponse,
     ConfiguracionData, EstadoCuentaArchivoResponse
 )
+from .autocategorizar import construir_historial, pistas as pistas_de, sugerir as sugerir_categoria, _TIPO_ETIQUETA
 from .parsers.bank_pdf_parser import extract_movements_from_pdf, generate_movement_hash
 
 # Inicializar Base de Datos
@@ -1100,6 +1101,65 @@ def cambiar_estatus_factura(transaccion_id: int, request: Request, estatus_factu
     t.estatus_factura = estatus_factura
     db.commit()
     return {"id": t.id, "estatus_factura": t.estatus_factura}
+
+@app.get("/api/transacciones/sugerencias-categoria")
+def sugerencias_categoria(request: Request, db: Session = Depends(get_db)):
+    """Agrupa los movimientos SIN categoría por huella (comercio/cuenta destino/palabra) y propone
+    la categoría que el propio usuario ya usó antes. Solo lectura: aplicar usa /bulk-update."""
+    alcance = _alcance_cuentas(request)
+    q = db.query(Transaccion)
+    if alcance is not None:
+        q = q.filter(Transaccion.cuenta_id.in_(alcance or [-1]))
+    todos = q.all()
+    nombres = {c.id: c.nombre for c in db.query(Categoria).all()}
+    historial = construir_historial(
+        (t.concepto, t.categoria_id) for t in todos if t.categoria_id is not None and t.tipo == "SALIDA"
+    )
+    cierres = {
+        (c.cuenta_id, c.anio, c.mes)
+        for c in db.query(CierreMes).filter(CierreMes.cerrado == True).all()
+    }
+    grupos: Dict[tuple, dict] = {}
+    sin_pistas = ambiguos = total_sin_cat = 0
+    for t in todos:
+        if t.categoria_id is not None or t.tipo != "SALIDA":
+            continue
+        total_sin_cat += 1
+        sug = sugerir_categoria(t.concepto, historial)
+        if sug is None:
+            if any(historial.get(p) for p in pistas_de(t.concepto)):
+                ambiguos += 1
+            else:
+                sin_pistas += 1
+            continue
+        clave = (sug["pista"], sug["categoria_id"])
+        g = grupos.setdefault(clave, {
+            "tipo_pista": _TIPO_ETIQUETA.get(sug["pista"][0], sug["pista"][0]),
+            "pista": sug["pista"][1],
+            "categoria_id": sug["categoria_id"],
+            "categoria": nombres.get(sug["categoria_id"], "?"),
+            "confianza": sug["confianza"],
+            "veces_usada": sug["n"], "de": sug["total"],
+            "ids": [], "bloqueados": 0, "total": 0.0, "ejemplo": (t.concepto or "")[:110],
+        })
+        if (t.cuenta_id, t.fecha.year, t.fecha.month) in cierres:
+            g["bloqueados"] += 1
+            continue
+        g["ids"].append(t.id)
+        g["total"] += float(t.monto or 0)
+    lista = [g for g in grupos.values() if g["ids"]]
+    for g in lista:
+        g["cantidad"] = len(g["ids"])
+        g["total"] = round(g["total"], 2)
+    lista.sort(key=lambda g: (g["confianza"] != "alta", -g["total"]))
+    return {
+        "total_sin_categoria": total_sin_cat,
+        "sugeridos": sum(g["cantidad"] for g in lista),
+        "ambiguos": ambiguos,
+        "sin_pistas": sin_pistas,
+        "grupos": lista,
+    }
+
 
 @app.post("/api/transacciones/bulk-update")
 def edicion_masiva_transacciones(payload: BulkTransaccionUpdate, request: Request, db: Session = Depends(get_db)):

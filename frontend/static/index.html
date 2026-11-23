@@ -1373,6 +1373,12 @@
                                 ⚠️ <span x-text="conteoSinCategoria"></span> sin categoría
                             </button>
                             <button type="button"
+                                    x-show="conteoSinCategoria > 0 && !soloLectura"
+                                    @click="abrirSugerenciasCategoria()"
+                                    class="px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-700 font-bold text-[10px] hover:opacity-90 transition">
+                                ✨ Sugerir categorías
+                            </button>
+                            <button type="button"
                                     x-show="conteoPendientesFactura > 0"
                                     @click="filtros.estatus_factura = 'PENDIENTE'; filtrarTransacciones()"
                                     class="px-2 py-0.5 rounded-full bg-rose-950 text-rose-400 border border-rose-700 font-bold text-[10px] hover:opacity-90 transition">
@@ -2500,6 +2506,63 @@
         </div>
     </div>
 
+    <!-- MODAL: SUGERENCIAS DE CATEGORÍA (aprendidas del historial del propio usuario) -->
+    <div x-show="sugCat.abierto" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-sm" x-cloak>
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-3xl w-full p-5 sm:p-6 shadow-2xl space-y-3 overflow-y-auto max-h-[92vh]">
+            <div class="flex justify-between items-start pb-2 border-b border-slate-800">
+                <div>
+                    <h3 class="text-base font-bold text-white">✨ Sugerencias de categoría</h3>
+                    <p class="text-xs text-slate-400">Basadas en cómo ya clasificaste movimientos del mismo comercio o cuenta destino. Nada se cambia hasta que confirmes.</p>
+                </div>
+                <button @click="sugCat.abierto = false" class="text-slate-400 hover:text-white text-sm">✕</button>
+            </div>
+
+            <div x-show="sugCat.cargando" class="text-xs text-slate-400 py-6 text-center">Calculando sugerencias…</div>
+            <div x-show="sugCat.error" class="text-xs text-rose-400 bg-rose-950/40 border border-rose-800 rounded-xl p-2" x-text="sugCat.error"></div>
+
+            <template x-if="sugCat.data">
+                <div class="space-y-3">
+                    <p class="text-[11px] text-slate-300">
+                        <strong x-text="sugCat.data.total_sin_categoria"></strong> sin categoría ·
+                        <strong class="text-indigo-300" x-text="sugCat.data.sugeridos"></strong> con sugerencia ·
+                        <strong class="text-amber-400" x-text="sugCat.data.sin_pistas"></strong> sin pistas (clasifícalos a mano).
+                        Los de confianza <em>alta</em> vienen marcados; los de <em>media</em> revísalos antes de marcarlos.
+                    </p>
+                    <div class="space-y-1.5">
+                        <template x-for="(g, i) in sugCat.data.grupos" :key="i">
+                            <label class="flex items-start gap-2 p-2 rounded-xl border cursor-pointer"
+                                   :class="g.confianza === 'alta' ? 'border-emerald-800 bg-emerald-950/20' : 'border-amber-800 bg-amber-950/10'">
+                                <input type="checkbox" class="mt-1" x-model="sugCat.sel[i]">
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex flex-wrap items-center gap-x-2 text-xs">
+                                        <span class="font-bold text-white" x-text="g.categoria"></span>
+                                        <span class="px-1.5 rounded text-[10px] font-bold"
+                                              :class="g.confianza === 'alta' ? 'bg-emerald-900 text-emerald-300' : 'bg-amber-900 text-amber-300'"
+                                              x-text="g.confianza"></span>
+                                        <span class="text-slate-400" x-text="g.cantidad + ' mov. · ' + formatMoney(g.total)"></span>
+                                        <span x-show="g.bloqueados > 0" class="text-[10px] text-rose-400" x-text="'(' + g.bloqueados + ' en mes cerrado, omitidos)'"></span>
+                                    </div>
+                                    <div class="text-[10px] text-slate-500 truncate" x-text="g.tipo_pista + ': ' + g.pista + ' · usada ' + g.veces_usada + ' de ' + g.de + ' veces'"></div>
+                                    <div class="text-[10px] text-slate-500 font-mono truncate" x-text="g.ejemplo"></div>
+                                </div>
+                            </label>
+                        </template>
+                    </div>
+                </div>
+            </template>
+
+            <div class="flex items-center justify-between pt-2 border-t border-slate-800">
+                <span class="text-[11px] text-slate-400"><strong class="text-white" x-text="sugCatSeleccionados"></strong> movimiento(s) seleccionados</span>
+                <div class="flex items-center gap-2">
+                    <button type="button" @click="sugCat.abierto = false" class="px-4 py-2 text-xs text-slate-400 hover:text-white">Cancelar</button>
+                    <button type="button" @click="aplicarSugerenciasCategoria()" :disabled="sugCat.aplicando || sugCatSeleccionados === 0"
+                            class="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition shadow-lg"
+                            x-text="sugCat.aplicando ? 'Aplicando…' : 'Aplicar seleccionadas'"></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- MODAL: GESTIÓN DE USUARIOS, ROLES Y CUENTAS PERMITIDAS -->
     <div x-show="openModalUsuarios" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-sm" x-cloak>
         <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-xl w-full p-5 sm:p-6 shadow-2xl space-y-4 overflow-y-auto max-h-[92vh]">
@@ -3054,6 +3117,7 @@
                 busquedaEntidadForm: '',
                 archivarPdfAlImportar: true,
                 seleccionadosReporte: [],
+                sugCat: { abierto: false, cargando: false, aplicando: false, error: '', data: null, sel: {} },
                 bulkForm: {
                     categoria_id: '',
                     entidad_id: '',
@@ -4335,6 +4399,58 @@
                         this.seleccionadosReporte = this.transaccionesMostradas.map(t => t.id);
                     } else {
                         this.seleccionadosReporte = [];
+                    }
+                },
+
+                async abrirSugerenciasCategoria() {
+                    this.sugCat = { abierto: true, cargando: true, aplicando: false, error: '', data: null, sel: {} };
+                    try {
+                        const res = await fetch('/api/transacciones/sugerencias-categoria');
+                        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || 'No se pudieron calcular las sugerencias.');
+                        const data = await res.json();
+                        const sel = {};
+                        (data.grupos || []).forEach((g, i) => { sel[i] = g.confianza === 'alta'; });
+                        this.sugCat.data = data;
+                        this.sugCat.sel = sel;
+                    } catch (e) {
+                        this.sugCat.error = e.message || String(e);
+                    } finally {
+                        this.sugCat.cargando = false;
+                    }
+                },
+
+                get sugCatSeleccionados() {
+                    const g = (this.sugCat.data && this.sugCat.data.grupos) || [];
+                    return g.reduce((n, grp, i) => n + (this.sugCat.sel[i] ? grp.cantidad : 0), 0);
+                },
+
+                async aplicarSugerenciasCategoria() {
+                    const grupos = ((this.sugCat.data && this.sugCat.data.grupos) || []).filter((g, i) => this.sugCat.sel[i]);
+                    if (!grupos.length) return;
+                    const total = grupos.reduce((n, g) => n + g.cantidad, 0);
+                    if (!confirm(`Se asignará categoría a ${total} movimiento(s) en ${grupos.length} grupo(s). ¿Continuar?`)) return;
+                    this.sugCat.aplicando = true;
+                    let hechos = 0;
+                    try {
+                        for (const g of grupos) {
+                            const res = await fetch('/api/transacciones/bulk-update', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ ids: g.ids.map(Number), categoria_id: g.categoria_id })
+                            });
+                            if (!res.ok) {
+                                const err = await res.json().catch(() => ({}));
+                                throw new Error(`${err.detail || 'Error al aplicar'} (se aplicaron ${hechos} antes del error)`);
+                            }
+                            hechos += g.cantidad;
+                        }
+                        alert(`✅ Se clasificaron ${hechos} movimientos.`);
+                        this.sugCat.abierto = false;
+                        await this.filtrarTransacciones();
+                    } catch (e) {
+                        this.sugCat.error = e.message || String(e);
+                    } finally {
+                        this.sugCat.aplicando = false;
                     }
                 },
 
