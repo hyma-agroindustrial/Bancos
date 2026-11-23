@@ -581,6 +581,69 @@
         body.theme-dark .cb-nav-on, body.theme-dark .cb-nav-on:hover { background: rgba(16,185,129,.16); color: #34d399; }
         .cb-user { margin-top:auto; padding-top:.8rem; border-top:1px solid var(--border-color, #1e293b); }
         @media print { .cb-sidebar, .cb-topbar { display:none !important; } .cb-shell { margin-left:0 !important; } }
+
+        /* ========================================================================== */
+        /* REDISEÑO ETAPA 2: tablas, tarjetas, ventanas, campos y botones (tema Bosque) */
+        /* ========================================================================== */
+        body[data-theme="bosque"] { font-feature-settings: "tnum" 1, "cv11" 1; }
+        body[data-theme="bosque"] .font-black { font-weight: 700 !important; }
+        body[data-theme="bosque"] .tracking-wider, body[data-theme="bosque"] .tracking-wide { letter-spacing: .03em !important; }
+
+        /* Tablas: encabezado discreto, filas con línea fina y resalte suave */
+        body[data-theme="bosque"] table { border-collapse: separate; border-spacing: 0; }
+        body[data-theme="bosque"] thead, body[data-theme="bosque"] thead tr, body[data-theme="bosque"] thead th {
+            background-color: var(--bg-subtle) !important; color: var(--text-muted) !important;
+            font-weight: 600 !important; letter-spacing: .04em;
+        }
+        body[data-theme="bosque"] thead th { border-bottom: 1px solid var(--border-color) !important; }
+        body[data-theme="bosque"] tbody td { border-bottom: 1px solid #ece9df; }
+        body[data-theme="bosque"] tbody tr:hover > td { background-color: var(--row-hover); }
+        body[data-theme="bosque"] tbody tr:last-child > td { border-bottom: 0; }
+        body[data-theme="bosque"] .divide-y > :not([hidden]) ~ :not([hidden]) { border-color: #ece9df !important; }
+
+        /* Tarjetas y secciones: borde de 1px y sombra suave */
+        body[data-theme="bosque"] section.print-document,
+        body[data-theme="bosque"] section.no-print .bg-slate-800\/80 {
+            border: 1px solid var(--border-color) !important; border-radius: 16px !important;
+            box-shadow: 0 1px 2px rgba(31,36,33,.05), 0 8px 24px rgba(31,36,33,.05) !important;
+        }
+        body[data-theme="bosque"] .rounded-2xl { border-radius: 14px; }
+        body[data-theme="bosque"] .shadow-xl, body[data-theme="bosque"] .shadow-lg, body[data-theme="bosque"] .shadow-md {
+            box-shadow: 0 1px 2px rgba(31,36,33,.05), 0 4px 14px rgba(31,36,33,.06) !important;
+        }
+
+        /* Ventanas emergentes: fondo más ligero, panel limpio y encabezado separado */
+        body[data-theme="bosque"] .fixed.inset-0.bg-black\/80 { background-color: rgba(31,36,33,.5) !important; backdrop-filter: blur(2px); }
+        body[data-theme="bosque"] .rounded-3xl.shadow-2xl {
+            background-color: var(--bg-card) !important; border: 1px solid var(--border-color) !important;
+            border-radius: 18px !important; box-shadow: 0 24px 60px rgba(31,36,33,.22) !important;
+        }
+        body[data-theme="bosque"] .rounded-3xl.shadow-2xl > div:first-child.border-b,
+        body[data-theme="bosque"] .rounded-3xl.shadow-2xl > .flex.border-b { padding-bottom: .85rem; border-color: var(--border-color) !important; }
+        body[data-theme="bosque"] .rounded-3xl.shadow-2xl h3 { font-size: 1.05rem; font-weight: 700; }
+
+        /* Campos de formulario y botones */
+        body[data-theme="bosque"] input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+        body[data-theme="bosque"] select, body[data-theme="bosque"] textarea {
+            background-color: var(--input-bg) !important; border-color: var(--border-input) !important; border-radius: 10px;
+        }
+        body[data-theme="bosque"] input:focus, body[data-theme="bosque"] select:focus, body[data-theme="bosque"] textarea:focus {
+            outline: none !important; border-color: #0f6e56 !important; box-shadow: 0 0 0 3px rgba(15,110,86,.18) !important;
+        }
+        body[data-theme="bosque"] input[type="checkbox"], body[data-theme="bosque"] input[type="radio"] { accent-color: #0f6e56; }
+        body[data-theme="bosque"] button.bg-slate-800, body[data-theme="bosque"] a.bg-slate-800 {
+            background-color: #ffffff !important; border: 1px solid var(--border-color) !important; border-radius: 10px;
+        }
+        body[data-theme="bosque"] button.bg-slate-800:hover, body[data-theme="bosque"] a.bg-slate-800:hover {
+            background-color: #edf5f1 !important; border-color: #9fe1cb !important;
+        }
+        body[data-theme="bosque"] button.bg-emerald-600, body[data-theme="bosque"] a.bg-emerald-600 { border-radius: 10px; box-shadow: 0 1px 2px rgba(8,80,65,.25) !important; }
+
+        /* Barras de desplazamiento finas */
+        * { scrollbar-width: thin; scrollbar-color: #cfcbbd transparent; }
+        *::-webkit-scrollbar { width: 9px; height: 9px; }
+        *::-webkit-scrollbar-thumb { background: #cfcbbd; border-radius: 99px; }
+        *::-webkit-scrollbar-thumb:hover { background: #b4b2a9; }
     </style>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
 </head>
