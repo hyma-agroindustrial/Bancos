@@ -2,7 +2,10 @@ import os
 import re
 import json
 import hashlib
+import hmac
+import time
 import secrets
+import threading
 import calendar
 from datetime import datetime, date
 from decimal import Decimal
@@ -49,16 +52,129 @@ app = FastAPI(
     description="Sistema contable automatizado con personalización de marca, captura al vuelo de categorías y conciliación bancaria."
 )
 
+def _origenes_permitidos() -> list:
+    """CORS restringido. La app web se sirve desde el mismo origen, asi que solo se permiten
+    los orígenes locales, el dominio público de Render (si existe) y los de CORS_ORIGINS."""
+    lista = ["http://localhost:8000", "http://127.0.0.1:8000"]
+    extra = os.environ.get("CORS_ORIGINS", "")
+    lista += [o.strip().rstrip("/") for o in extra.split(",") if o.strip()]
+    render_url = (os.environ.get("RENDER_EXTERNAL_URL") or "").strip().rstrip("/")
+    if render_url:
+        lista.append(render_url)
+    return lista
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_origenes_permitidos(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-def hash_pin(pin: str) -> str:
+# ----------------------------------------------------------------------------------------------------
+# SEGURIDAD DE LOGIN: PIN con PBKDF2-SHA256 + sal aleatoria por usuario, límite de intentos y
+# caducidad de sesión. Los PIN antiguos (SHA-256 con sal fija) se aceptan una vez y se migran solos.
+# Formato nuevo en pin_hash (cabe en String(128)):  p2$<iteraciones>$<sal hex>$<hash hex>
+# ----------------------------------------------------------------------------------------------------
+PBKDF2_ITER = 240_000
+SESION_HORAS = float(os.environ.get("SESION_HORAS", "12"))
+LOGIN_MAX_FALLOS = int(os.environ.get("LOGIN_MAX_FALLOS", "5"))
+LOGIN_BLOQUEO_SEG = int(os.environ.get("LOGIN_BLOQUEO_MIN", "15")) * 60
+
+
+def _hash_legacy(pin: str) -> str:
     return hashlib.sha256(f"hyma_bancos_salt_{pin}".encode("utf-8")).hexdigest()
+
+
+def hash_pin(pin: str) -> str:
+    sal = secrets.token_bytes(16)
+    dk = hashlib.pbkdf2_hmac("sha256", pin.encode("utf-8"), sal, PBKDF2_ITER)
+    return f"p2${PBKDF2_ITER}${sal.hex()}${dk.hex()}"
+
+
+def _pin_es_moderno(almacenado: str) -> bool:
+    return (almacenado or "").startswith("p2$")
+
+
+def verificar_pin(pin: str, almacenado: str) -> bool:
+    almacenado = almacenado or ""
+    if _pin_es_moderno(almacenado):
+        try:
+            _, iters, sal_hex, hash_hex = almacenado.split("$")
+            dk = hashlib.pbkdf2_hmac("sha256", pin.encode("utf-8"), bytes.fromhex(sal_hex), int(iters))
+            return hmac.compare_digest(dk.hex(), hash_hex)
+        except Exception:
+            return False
+    return hmac.compare_digest(_hash_legacy(pin), almacenado)
+
+
+_HASH_DUMMY = hash_pin("00000000")  # para igualar el tiempo cuando el usuario no existe
+
+
+def nuevo_token_sesion() -> str:
+    """56 caracteres: 8 hex con la hora de expiración (epoch) + 48 hex aleatorios.
+    Cabe en token_sesion (String(64)). El token solo vale si coincide con el guardado en BD."""
+    expira = int(time.time() + SESION_HORAS * 3600)
+    return f"{expira:08x}{secrets.token_hex(24)}"
+
+
+def token_vigente(token: str) -> bool:
+    if len(token) != 56:       # formato antiguo (sin caducidad): obliga a iniciar sesión de nuevo
+        return False
+    try:
+        return int(token[:8], 16) > time.time()
+    except ValueError:
+        return False
+
+
+_intentos_login: Dict[str, list] = {}   # clave -> [fallos, bloqueado_hasta_epoch]
+_intentos_lock = threading.Lock()
+
+
+def _ip_cliente(request: Request) -> str:
+    xff = request.headers.get("x-forwarded-for") or ""
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else "?"
+
+
+def _claves_intentos(request: Request, uname: str) -> list:
+    return [f"ip:{_ip_cliente(request)}", f"user:{uname}"]
+
+
+def _segundos_bloqueado(claves: list) -> int:
+    ahora = time.time()
+    with _intentos_lock:
+        restante = 0
+        for c in claves:
+            reg = _intentos_login.get(c)
+            if reg and reg[1] > ahora:
+                restante = max(restante, int(reg[1] - ahora) + 1)
+        return restante
+
+
+def _registrar_fallo(claves: list) -> None:
+    ahora = time.time()
+    with _intentos_lock:
+        for c in claves:
+            reg = _intentos_login.get(c)
+            if not reg or (reg[1] and reg[1] <= ahora):
+                reg = [0, 0.0]
+            reg[0] += 1
+            if reg[0] >= LOGIN_MAX_FALLOS:
+                reg[1] = ahora + LOGIN_BLOQUEO_SEG
+                reg[0] = 0
+            _intentos_login[c] = reg
+        if len(_intentos_login) > 5000:   # evita crecimiento sin límite
+            for k in [k for k, v in _intentos_login.items() if v[1] <= ahora and v[0] == 0]:
+                _intentos_login.pop(k, None)
+
+
+def _limpiar_fallos(claves: list) -> None:
+    with _intentos_lock:
+        for c in claves:
+            _intentos_login.pop(c, None)
 
 
 # ====================================================================================================
@@ -111,6 +227,9 @@ async def control_de_acceso(request: Request, call_next):
     token = auth.replace("Bearer ", "").strip() or (request.query_params.get("token") or "").strip()
     if not token:
         return JSONResponse({"detail": "Sesión requerida. Inicia sesión de nuevo."}, status_code=401)
+
+    if not token_vigente(token):
+        return JSONResponse({"detail": "Sesión expirada. Inicia sesión de nuevo."}, status_code=401)
 
     db = SessionLocal()
     try:
@@ -201,10 +320,14 @@ def startup_seed_data():
 
         # 2. Seed Usuario Administrador por defecto
         if db.query(Usuario).count() == 0:
+            pin_inicial = (os.environ.get("ADMIN_PIN_INICIAL") or "").strip()
+            if not (pin_inicial.isdigit() and 4 <= len(pin_inicial) <= 8):
+                pin_inicial = "".join(secrets.choice("0123456789") for _ in range(6))
+                print(f"[SEGURIDAD] Usuario 'admin' creado con PIN inicial aleatorio: {pin_inicial}  (cámbialo al entrar)", flush=True)
             admin_user = Usuario(
                 username="admin",
                 nombre="Administrador General",
-                pin_hash=hash_pin("1234"),
+                pin_hash=hash_pin(pin_inicial),
                 rol="ADMIN",
                 activo=True
             )
@@ -332,13 +455,32 @@ async def subir_fotografia_logo(file: UploadFile = File(...), db: Session = Depe
 # 0. CONTROL DE ACCESO (USUARIO + PIN) PARA ACCESO DESDE CUALQUIER DISPOSITIVO
 # ====================================================================================================
 @app.post("/api/auth/login", response_model=AuthResponse)
-def login_usuario(payload: UsuarioLogin, db: Session = Depends(get_db)):
+def login_usuario(payload: UsuarioLogin, request: Request, db: Session = Depends(get_db)):
     uname = (payload.username or "").strip().lower()
+    claves = _claves_intentos(request, uname)
+    espera = _segundos_bloqueado(claves)
+    if espera:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Demasiados intentos fallidos. Intenta de nuevo en {max(1, espera // 60)} min.",
+        )
+
+    pin = (payload.pin or "").strip()
     user = db.query(Usuario).filter(func.lower(Usuario.username) == uname, Usuario.activo == True).first()
-    if not user or user.pin_hash != hash_pin(payload.pin.strip()):
+    if user is None:
+        verificar_pin(pin, _HASH_DUMMY)   # mismo costo de tiempo para no revelar si el usuario existe
+        ok = False
+    else:
+        ok = verificar_pin(pin, user.pin_hash)
+    if not ok:
+        _registrar_fallo(claves)
         raise HTTPException(status_code=401, detail="Usuario o PIN incorrecto.")
 
-    token = secrets.token_hex(24)
+    _limpiar_fallos(claves)
+    if not _pin_es_moderno(user.pin_hash):      # migración transparente al hash fuerte
+        user.pin_hash = hash_pin(pin)
+
+    token = nuevo_token_sesion()
     user.token_sesion = token
     db.commit()
 
@@ -352,6 +494,8 @@ def verificar_sesion(authorization: Optional[str] = Header(None), db: Session = 
     if not authorization:
         raise HTTPException(status_code=401, detail="No autorizado.")
     token = authorization.replace("Bearer ", "").strip()
+    if not token_vigente(token):
+        raise HTTPException(status_code=401, detail="Sesión inválida o expirada.")
     user = db.query(Usuario).filter(Usuario.token_sesion == token, Usuario.activo == True).first()
     if not user:
         raise HTTPException(status_code=401, detail="Sesión inválida o expirada.")
@@ -390,12 +534,15 @@ def actualizar_usuario(usuario_id: int, payload: UsuarioUpdate, db: Session = De
         user.nombre = payload.nombre.strip()
     if payload.pin is not None and payload.pin.strip():
         user.pin_hash = hash_pin(payload.pin.strip())
+        user.token_sesion = None   # un PIN nuevo cierra cualquier sesión abierta
     if payload.rol is not None:
         if user.username == "admin" and payload.rol != "ADMIN":
             raise HTTPException(status_code=400, detail="El administrador principal siempre debe mantener rol ADMIN.")
         user.rol = payload.rol
     if payload.activo is not None:
         user.activo = payload.activo
+        if not payload.activo:
+            user.token_sesion = None
     if payload.cuentas_permitidas is not None:
         user.cuentas_permitidas = json.dumps(payload.cuentas_permitidas)
 
