@@ -579,7 +579,9 @@
         .cb-nav:hover { background: var(--row-hover, #1e293b); }
         .cb-nav-on, .cb-nav-on:hover { background: #e1f5ee; color: #085041; font-weight: 700; }
         body.theme-dark .cb-nav-on, body.theme-dark .cb-nav-on:hover { background: rgba(16,185,129,.16); color: #34d399; }
-        .cb-user { margin-top:auto; padding-top:.8rem; border-top:1px solid var(--border-color, #1e293b); }
+        .cb-user { margin-top:auto; padding-top:.8rem; border-top:1px solid var(--border-color, #1e293b);
+            position: sticky; bottom: -.9rem; background: var(--bg-card, #0b1220); padding-bottom: .9rem; margin-bottom: -.9rem; }
+        @media (max-height: 840px) { .cb-nav { padding-top:.35rem; padding-bottom:.35rem; } .cb-group { padding-top:.55rem; } }
         @media print { .cb-sidebar, .cb-topbar { display:none !important; } .cb-shell { margin-left:0 !important; } }
 
         /* ========================================================================== */
