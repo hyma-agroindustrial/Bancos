@@ -1262,8 +1262,11 @@ async def extraer_movimientos_pdf(
 
     filename_raw = (file.filename or "").strip()
     ext = os.path.splitext(filename_raw)[1].lower()
-    if ext not in (".pdf", ".csv"):
-        raise HTTPException(status_code=400, detail="El archivo debe ser un Estado de Cuenta válido en formato PDF (.pdf) o CSV (.csv).")
+    if ext not in (".pdf", ".csv", ".xlsx", ".txt"):
+        raise HTTPException(
+            status_code=400,
+            detail="El archivo debe ser un Estado de Cuenta válido en formato PDF (.pdf), CSV (.csv) o Excel (.xlsx).",
+        )
 
     content = await file.read()
     if len(content) == 0:
@@ -1274,7 +1277,7 @@ async def extraer_movimientos_pdf(
 
     existing_hashes, existing_signatures = _construir_firmas_existentes(db, cuenta_id)
 
-    if ext == ".csv":
+    if ext in (".csv", ".xlsx", ".txt"):
         movimientos, resumen_dict = extract_movements_from_csv(
             content,
             cuenta_id,
@@ -1399,8 +1402,8 @@ def confirmar_importacion_lote(payload: BatchImportConfirm, request: Request, db
     ignorados = 0
 
     ext_origen = os.path.splitext(payload.archivo_nombre or "")[1].lower()
-    es_csv = (ext_origen == ".csv") or ((payload.origen_formato or "").upper() == "CSV")
-    origen_str = "CSV_EXTRACT" if es_csv else "PDF_EXTRACT"
+    es_tabular = (ext_origen in (".csv", ".xlsx", ".txt")) or ((payload.origen_formato or "").upper() in ("CSV", "EXCEL"))
+    origen_str = "CSV_EXTRACT" if es_tabular else "PDF_EXTRACT"
 
     hashes_db, firmas_db = _construir_firmas_existentes(db, payload.cuenta_id)
     hashes_global = set(
@@ -1497,7 +1500,8 @@ def confirmar_importacion_lote(payload: BatchImportConfirm, request: Request, db
                 EstadoCuentaArchivo.nombre_archivo_original == payload.archivo_nombre
             ).first()
             if not ya_archivado:
-                ext_save = ".csv" if es_csv else ".pdf"
+                ext_save = ext_origen if ext_origen in (".csv", ".xlsx", ".pdf") else (".csv" if es_tabular else ".pdf")
+                etiqueta_fmt = "Excel" if ext_save == ".xlsx" else ("CSV" if ext_save == ".csv" else "PDF")
                 clean_filename = f"edo_{payload.cuenta_id}_{anio_edo}_{int(mes_edo):02d}_{secrets.token_hex(4)}{ext_save}"
                 file_path = save_estado_cuenta_pdf(clean_filename, file_bytes, STORAGE_EDOS_DIR)
                 nuevo_archivo = EstadoCuentaArchivo(
@@ -1508,10 +1512,10 @@ def confirmar_importacion_lote(payload: BatchImportConfirm, request: Request, db
                     nombre_archivo_almacenado=clean_filename,
                     ruta_archivo=file_path,
                     tamano_bytes=len(file_bytes),
-                    notas=f"Archivado automáticamente ({'CSV' if es_csv else 'PDF'}) al importar {insertados} movimiento(s)."
+                    notas=f"Archivado automáticamente ({etiqueta_fmt}) al importar {insertados} movimiento(s)."
                 )
                 db.add(nuevo_archivo)
-                archivado_msg = f" El archivo {'CSV' if es_csv else 'PDF'} fue archivado automáticamente en Estados de Cuenta ({NOMBRE_MESES_CORTO.get(mes_edo, mes_edo)} {anio_edo})."
+                archivado_msg = f" El archivo {etiqueta_fmt} fue archivado automáticamente en Estados de Cuenta ({NOMBRE_MESES_CORTO.get(mes_edo, mes_edo)} {anio_edo})."
 
         db.commit()
     except HTTPException:

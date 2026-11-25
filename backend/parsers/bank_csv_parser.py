@@ -138,10 +138,71 @@ def _detect_delimiter_and_rows(text: str) -> List[List[str]]:
     return [row for row in reader if any(str(c).strip() for c in row)]
 
 
+def _rows_from_excel_bytes(file_bytes: bytes) -> List[List[str]]:
+    """Extrae filas desde un archivo Excel (.xlsx) usando openpyxl sin pérdida de precisión decimal."""
+    import openpyxl
+
+    wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True, read_only=True)
+    sheet = wb.active
+    rows: List[List[str]] = []
+    for r in sheet.iter_rows(values_only=True):
+        if r is None:
+            continue
+        str_row: List[str] = []
+        for cell in r:
+            if cell is None:
+                str_row.append("")
+            elif isinstance(cell, datetime):
+                str_row.append(cell.strftime("%d/%m/%Y"))
+            elif isinstance(cell, date):
+                str_row.append(cell.strftime("%d/%m/%Y"))
+            elif isinstance(cell, (int, float, Decimal)):
+                # Formatear con 2 decimales exactos si es número
+                str_row.append(f"{Decimal(str(cell)).quantize(Decimal('0.01'))}")
+            else:
+                str_row.append(str(cell).strip())
+        if any(str_row):
+            rows.append(str_row)
+    wb.close()
+    return rows
+
+
+def _is_month_divider_concept(concept_up: str) -> Optional[Tuple[int, int]]:
+    """
+    Detecta si un texto de concepto es únicamente un separador de mes en auxiliares de Excel
+    (ej. 'SEPTIEMBRE DEL 2021', 'OCT DEL 2022', 'ENERO 2024', 'DIC DEL 2025').
+    Devuelve (anio, mes) si es separador, o None si es un concepto normal.
+    """
+    c = re.sub(r"\s+", " ", concept_up.strip())
+    meses_map = {
+        "ENERO": 1, "ENE": 1,
+        "FEBRERO": 2, "FEB": 2,
+        "MARZO": 3, "MAR": 3,
+        "ABRIL": 4, "ABR": 4,
+        "MAYO": 5, "MAY": 5,
+        "JUNIO": 6, "JUN": 6,
+        "JULIO": 7, "JUL": 7,
+        "AGOSTO": 8, "AGO": 8,
+        "SEPTIEMBRE": 9, "SEPT": 9, "SEP": 9,
+        "OCTUBRE": 10, "OCT": 10,
+        "NOVIEMBRE": 11, "NOV": 11,
+        "DICIEMBRE": 12, "DIC": 12,
+    }
+    m = re.match(
+        r"^(ENERO|ENE|FEBRERO|FEB|MARZO|MAR|ABRIL|ABR|MAYO|MAY|JUNIO|JUN|JULIO|JUL|AGOSTO|AGO|SEPTIEMBRE|SEPT|SEP|OCTUBRE|OCT|NOVIEMBRE|NOV|DICIEMBRE|DIC)(?:\s+DEL?)?\s+(20\d{2})$",
+        c,
+    )
+    if m:
+        return int(m.group(2)), meses_map[m.group(1)]
+    return None
+
+
 def _extract_preheader_metadata(rows: List[List[str]]) -> Dict[str, Any]:
     """
     Escanea las primeras filas de metadatos (antes de la tabla de movimientos)
     para detectar año, fecha de reporte/corte, saldo inicial declarado, moneda y cuenta.
+    Soporta también la línea 1 del formato Scotiabank CSV:
+      351312264;11505598338;HYMA AGROINDUSTRIAL SA DE CV;MXN;2026/11/24;14;107292.51;58;109984.93;72
     """
     meta: Dict[str, Any] = {
         "year": datetime.now().year,
@@ -152,13 +213,30 @@ def _extract_preheader_metadata(rows: List[List[str]]) -> Dict[str, Any]:
         "cuenta_detectada": None,
     }
 
+    # Caso especial línea 1 de Scotiabank CSV: [id, cuenta, empresa, moneda, fecha_reporte, num_abonos, sum_abonos, num_cargos, sum_cargos, total_movs]
+    if rows and len(rows[0]) >= 6:
+        r0 = [str(c).strip() for c in rows[0]]
+        if re.match(r"^\d{7,15}$", r0[1].replace(" ", "")) and r0[3].upper() in ("MXN", "USD"):
+            meta["cuenta_detectada"] = r0[1].replace(" ", "")
+            meta["moneda_detectada"] = r0[3].upper()
+            dt0 = parse_csv_date(r0[4], meta["year"])
+            if dt0:
+                meta["fecha_reporte"] = dt0
+                meta["year"] = dt0.year
+
     for row in rows[:20]:
         joined = " ".join(str(c).strip() for c in row if str(c).strip())
         joined_up = joined.upper()
 
+        # Si ya es la fila de encabezados de columnas, detener búsqueda de pre-header
+        if any(k in joined_up for k in ("FECHA", "DATE")) and any(
+            k in joined_up for k in ("IMPORTE", "RETIRO", "CARGO", "ABONO", "DEPOSITO", "DEPÓSITO", "SALDO")
+        ):
+            break
+
         # Detectar año explícito en encabezado
         m_yr = re.search(r"\b(20\d{2})\b", joined_up)
-        if m_yr:
+        if m_yr and not meta["fecha_reporte"]:
             yr = int(m_yr.group(1))
             if 2000 <= yr <= 2100:
                 meta["year"] = yr
@@ -211,14 +289,14 @@ def _extract_preheader_metadata(rows: List[List[str]]) -> Dict[str, Any]:
         elif re.search(r"\b(MXN|MN|PESOS)\b", joined_up) and not meta["moneda_detectada"]:
             meta["moneda_detectada"] = "MXN"
 
-        # Detectar CLABE (18 dígitos) o cuenta (10-11 dígitos)
+        # Detectar CLABE (18 dígitos) o cuenta (10-12 dígitos, incluyendo con espacio como '1150 5598338')
         m_clabe = re.search(r"\b(\d{18})\b", joined_up)
         if m_clabe:
             meta["cuenta_detectada"] = m_clabe.group(1)
         elif not meta["cuenta_detectada"]:
-            m_cta = re.search(r"(?:CUENTA|CTA|NO\.?)[:\s#]*(\d{7,12})\b", joined_up)
+            m_cta = re.search(r"(?:CUENTA|CTA|NO\.?|SCOTIABANK|BANORTE|BBVA)[:\s#]*(\d{4}\s?\d{7}|\d{7,12})\b", joined_up)
             if m_cta:
-                meta["cuenta_detectada"] = m_cta.group(1)
+                meta["cuenta_detectada"] = m_cta.group(1).replace(" ", "")
 
     return meta
 
@@ -273,12 +351,27 @@ def build_period_summary(
     fecha_fin = max(fechas) if fechas else date.today()
     fecha_reporte = fecha_reporte_declarada or fecha_fin
 
-    # Determinar el mes/año predominante del estado de cuenta (moda de meses para evitar que un día de corte del mes previo cambie el periodo)
+    # Determinar el mes/año del estado de cuenta:
+    # - Si abarca varios meses distintos (ej. acumulado anual o auxiliar multianual), usar el mes/año de la fecha final / corte
+    # - Si es un estado de cuenta mensual (1 solo mes, o 2 meses contiguos por días de corte), usar la moda de meses
     month_counts: Dict[Tuple[int, int], int] = {}
     for f in fechas:
         key = (f.year, f.month)
         month_counts[key] = month_counts.get(key, 0) + 1
-    anio_det, mes_det = max(month_counts, key=month_counts.get) if month_counts else (fecha_fin.year, fecha_fin.month)
+    if len(month_counts) > 2:
+        anio_det, mes_det = (fecha_reporte.year, fecha_reporte.month)
+        m_ini = f"{NOMBRE_MESES_ES.get(fecha_inicio.month, '')} {fecha_inicio.year}"
+        m_fin = f"{NOMBRE_MESES_ES.get(fecha_fin.month, '')} {fecha_fin.year}"
+        periodo_etiqueta = (
+            f"{m_ini} – {m_fin} "
+            f"({fecha_inicio.strftime('%d/%m/%Y')} al {fecha_fin.strftime('%d/%m/%Y')})"
+        )
+    else:
+        anio_det, mes_det = max(month_counts, key=month_counts.get) if month_counts else (fecha_fin.year, fecha_fin.month)
+        periodo_etiqueta = (
+            f"{NOMBRE_MESES_ES.get(mes_det, '')} {anio_det} "
+            f"({fecha_inicio.strftime('%d/%m/%Y')} al {fecha_fin.strftime('%d/%m/%Y')})"
+        )
 
     total_abonos = Decimal("0.00")
     total_cargos = Decimal("0.00")
@@ -331,11 +424,6 @@ def build_period_summary(
         diferencia_cuadre = Decimal("0.00")
         cuadra_exacto = True
 
-    periodo_etiqueta = (
-        f"{NOMBRE_MESES_ES.get(mes_det, '')} {anio_det} "
-        f"({fecha_inicio.strftime('%d/%m/%Y')} al {fecha_fin.strftime('%d/%m/%Y')})"
-    )
-
     return {
         "formato_origen": formato_origen,
         "fecha_reporte": fecha_reporte,
@@ -368,26 +456,34 @@ def extract_movements_from_csv(
     cuenta_obj: Optional[Any] = None,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """
-    Motor universal de importación de estados de cuenta bancarios en formato CSV.
-    Soporta exportaciones de Scotiabank, Banorte, BBVA, Santander, Banamex, BanBajío, HSBC y formatos contables estándar.
+    Motor universal de importación de estados de cuenta bancarios y auxiliares contables en formato CSV o Excel (.xlsx).
+    Soporta exportaciones oficiales de Scotiabank (separado por ; con Tipo(Cargo/Abono) y Consecutivo),
+    Banorte, BBVA, Santander, Banamex, BanBajío, HSBC, así como libros auxiliares de Excel/TSV.
     Devuelve: (lista_movimientos, resumen_periodo)
     """
-    text = _decode_csv_bytes(file_bytes)
-    rows = _detect_delimiter_and_rows(text)
+    is_excel = len(file_bytes) >= 4 and file_bytes[:2] == b"PK"
+    formato_origen = "EXCEL" if is_excel else "CSV"
+
+    if is_excel:
+        rows = _rows_from_excel_bytes(file_bytes)
+    else:
+        text = _decode_csv_bytes(file_bytes)
+        rows = _detect_delimiter_and_rows(text)
+
     if not rows:
-        return [], build_period_summary([], formato_origen="CSV")
+        return [], build_period_summary([], formato_origen=formato_origen)
 
     meta = _extract_preheader_metadata(rows)
     default_year = meta["year"]
     advertencias: List[str] = []
 
-    # Validar correspondencia con la cuenta bancaria activa si el CSV trae número de cuenta o moneda
+    # Validar correspondencia con la cuenta bancaria activa si el archivo trae número de cuenta o moneda
     if cuenta_obj is not None:
         if meta["moneda_detectada"] and getattr(cuenta_obj, "moneda", None):
             cta_mon = str(cuenta_obj.moneda).strip().upper()
             if meta["moneda_detectada"] != cta_mon:
                 advertencias.append(
-                    f"⚠️ El archivo CSV indica moneda {meta['moneda_detectada']}, mientras que la cuenta activa está configurada en {cta_mon}."
+                    f"⚠️ El archivo indica moneda {meta['moneda_detectada']}, mientras que la cuenta activa está configurada en {cta_mon}."
                 )
         if meta["cuenta_detectada"]:
             det = meta["cuenta_detectada"]
@@ -395,7 +491,7 @@ def extract_movements_from_csv(
             clabe_cta = re.sub(r"\D", "", str(getattr(cuenta_obj, "clabe", "") or ""))
             if len(det) >= 4 and num_cta and not (det[-4:] == num_cta[-4:] or (clabe_cta and det[-4:] in clabe_cta)):
                 advertencias.append(
-                    f"⚠️ El archivo CSV menciona la cuenta *{det[-4:]}, que no coincide con la terminación de la cuenta activa (*{num_cta[-4:]})."
+                    f"⚠️ El archivo menciona la cuenta *{det[-4:]}, que no coincide con la terminación de la cuenta activa (*{num_cta[-4:]})."
                 )
 
     # Localizar la fila de encabezados de la tabla de movimientos
@@ -409,7 +505,9 @@ def extract_movements_from_csv(
         "monto": None,
         "tipo": None,
         "saldo": None,
+        "consecutivo": None,
     }
+    concept_cols: List[int] = []
 
     for idx, row in enumerate(rows[:35]):
         norm_cells = [re.sub(r"\s+", " ", str(c).strip().upper()) for c in row]
@@ -421,36 +519,60 @@ def extract_movements_from_csv(
         if has_fecha and has_amt:
             header_idx = idx
             for c_i, col_name in enumerate(norm_cells):
-                if col_map["fecha"] is None and any(k in col_name for k in ("FECHA", "DATE", "DIA", "DÍA")):
+                if not col_name:
+                    continue
+
+                # 1. Detectar primero columnas compuestas de Tipo Cargo/Abono (ej. Scotiabank 'Tipo(Cargo/Abono)')
+                # para que NUNCA se confundan con una columna numérica de Cargo o Abono
+                is_compound_type = (
+                    ("CARGO" in col_name and "ABONO" in col_name)
+                    or ("RETIRO" in col_name and ("DEPOSITO" in col_name or "DEPÓSITO" in col_name))
+                    or ("C/A" in col_name)
+                    or ("CARGO/ABONO" in col_name)
+                )
+                if is_compound_type:
+                    col_map["tipo"] = c_i
+                    continue
+
+                if col_map["fecha"] is None and any(k in col_name for k in ("FECHA", "DATE", "DIA", "DÍA", "F. OPER")):
                     col_map["fecha"] = c_i
-                elif col_map["concepto"] is None and any(k in col_name for k in ("CONCEPTO", "DESCRIP", "DETALLE", "MOVIMIENTO", "NARRATIVA", "OBSERV")):
-                    col_map["concepto"] = c_i
-                elif col_map["referencia"] is None and any(k in col_name for k in ("REFERENCIA", "FOLIO", "RASTREO", "AUTORIZA", "REF", "CHEQUE", "CODIGO", "CÓDIGO")):
+                elif any(k in col_name for k in ("CONCEPTO", "DESCRIP", "DETALLE", "MOVIMIENTO", "NARRATIVA", "OBSERV", "TRANSACCI", "LEYENDA", "INFORMACI")):
+                    concept_cols.append(c_i)
+                    if col_map["concepto"] is None:
+                        col_map["concepto"] = c_i
+                elif col_map["referencia"] is None and any(k in col_name for k in ("REFERENCIA", "FOLIO", "RASTREO", "AUTORIZA", "REF", "CHEQ", "CHEQUE", "CODIGO", "CÓDIGO")):
                     col_map["referencia"] = c_i
-                elif col_map["cargo"] is None and any(k in col_name for k in ("CARGO", "RETIRO", "SALIDA", "DEBITO", "DÉBITO", "EGRESO")):
+                elif col_map["cargo"] is None and "ABONO" not in col_name and "TIPO" not in col_name and any(
+                    k in col_name for k in ("CARGO", "RETIRO", "SALIDA", "DEBITO", "DÉBITO", "EGRESO")
+                ):
                     col_map["cargo"] = c_i
-                elif col_map["abono"] is None and any(k in col_name for k in ("ABONO", "DEPOSITO", "DEPÓSITO", "ENTRADA", "CREDITO", "CRÉDITO", "INGRESO")):
+                elif col_map["abono"] is None and "CARGO" not in col_name and "TIPO" not in col_name and any(
+                    k in col_name for k in ("ABONO", "DEPOSITO", "DEPÓSITO", "ENTRADA", "CREDITO", "CRÉDITO", "INGRESO")
+                ):
                     col_map["abono"] = c_i
                 elif col_map["saldo"] is None and any(k in col_name for k in ("SALDO", "BALANCE", "DISPONIBLE")):
                     col_map["saldo"] = c_i
-                elif col_map["tipo"] is None and any(k in col_name for k in ("TIPO", "NATURALEZA", "C/A", "SENTIDO")):
-                    col_map["tipo"] = c_i
                 elif col_map["monto"] is None and any(k in col_name for k in ("IMPORTE", "MONTO", "VALOR", "AMOUNT", "CANTIDAD")):
                     col_map["monto"] = c_i
+                elif col_map["consecutivo"] is None and any(k in col_name for k in ("CONSECUTIVO", "SECUENCIA", "ORDEN")):
+                    col_map["consecutivo"] = c_i
+                elif col_map["tipo"] is None and any(k in col_name for k in ("NATURALEZA", "SENTIDO", "TIPO MOV", "TIPO_MOV")):
+                    col_map["tipo"] = c_i
             break
 
     start_row = (header_idx + 1) if header_idx is not None else 0
     raw_extracted: List[Dict[str, Any]] = []
     saldo_inicial_fila: Optional[Decimal] = meta["saldo_inicial_declarado"]
+    last_valid_date: Optional[date] = None
 
     for r_idx, row in enumerate(rows[start_row:], start=start_row):
         cells = [str(c).strip() for c in row]
-        joined_up = " ".join(cells).upper()
+        joined_up = " ".join(c for c in cells if c).upper()
 
         if not any(cells):
             continue
 
-        # Detectar fila de Saldo Anterior / Inicial dentro de la tabla
+        # Detectar fila de Saldo Anterior / Inicial explícita dentro de la tabla
         if any(k in joined_up for k in ("SALDO ANTERIOR", "SALDO INICIAL", "BALANCE INICIAL")):
             if col_map["saldo"] is not None and col_map["saldo"] < len(cells):
                 amt = clean_csv_decimal(cells[col_map["saldo"]])
@@ -465,54 +587,10 @@ def extract_movements_from_csv(
             continue
 
         # Omitir filas de totales o encabezados repetidos
-        if any(joined_up.startswith(k) for k in ("TOTAL", "SUBTOTAL", "RESUMEN", "FECHA,CONCEPTO")):
+        if any(joined_up.startswith(k) for k in ("TOTAL", "SUBTOTAL", "RESUMEN", "FECHA,CONCEPTO", "FECHA CONCEPTO")):
             continue
 
-        # 1. Extraer Fecha
-        f_date: Optional[date] = None
-        if col_map["fecha"] is not None and col_map["fecha"] < len(cells):
-            f_date = parse_csv_date(cells[col_map["fecha"]], default_year)
-        if f_date is None:
-            # Buscar fecha en las primeras 3 columnas
-            for c_val in cells[:3]:
-                f_date = parse_csv_date(c_val, default_year)
-                if f_date:
-                    break
-        if f_date is None:
-            continue
-
-        # 2. Extraer Concepto y Referencia
-        concepto = ""
-        if col_map["concepto"] is not None and col_map["concepto"] < len(cells):
-            concepto = cells[col_map["concepto"]]
-        referencia = ""
-        if col_map["referencia"] is not None and col_map["referencia"] < len(cells):
-            referencia = cells[col_map["referencia"]]
-
-        if not concepto:
-            # Construir concepto de columnas de texto que no sean fecha ni montos
-            text_parts = []
-            used_indices = {i for i in col_map.values() if i is not None}
-            for c_i, c_val in enumerate(cells):
-                if c_i in used_indices:
-                    continue
-                if parse_csv_date(c_val, default_year) is None and clean_csv_decimal(c_val) is None:
-                    text_parts.append(c_val)
-            concepto = " ".join(text_parts).strip() or (referencia or "MOVIMIENTO BANCARIO CSV")
-
-        concepto_clean = re.sub(r"\s+", " ", concepto).strip()
-        referencia_clean = re.sub(r"\s+", " ", referencia).strip()
-
-        if not referencia_clean:
-            ref_match = re.search(
-                r"(?:REF\.?|REFERENCIA|CVE\.?\s*RASTREO|FOLIO|AUT\.?)[:\s#]*([A-Z0-9-]{4,35})",
-                concepto_clean,
-                re.IGNORECASE,
-            )
-            if ref_match:
-                referencia_clean = ref_match.group(1)
-
-        # 3. Extraer Cargo / Abono / Saldo con precisión Decimal('0.01')
+        # 1. Extraer Cargo / Abono / Saldo primero para distinguir filas de movimiento real vs divisores mensuales
         cargo_amt: Optional[Decimal] = None
         abono_amt: Optional[Decimal] = None
         saldo_amt: Optional[Decimal] = None
@@ -530,26 +608,99 @@ def extract_movements_from_csv(
                 if a_val is not None and abs(a_val) > Decimal("0.00"):
                     abono_amt = abs(a_val)
 
-        # Si viene en una sola columna de Importe/Monto
+        # Si viene en una sola columna de Importe/Monto (ej. Scotiabank CSV con columna Importe + Tipo(Cargo/Abono))
         if cargo_amt is None and abono_amt is None and col_map["monto"] is not None and col_map["monto"] < len(cells):
             m_val = clean_csv_decimal(cells[col_map["monto"]])
             if m_val is not None and abs(m_val) > Decimal("0.00"):
-                tipo_cell = cells[col_map["tipo"]].upper() if (col_map["tipo"] is not None and col_map["tipo"] < len(cells)) else ""
-                if any(k in tipo_cell for k in ("ABONO", "DEPOSITO", "DEPÓSITO", "ENTRADA", "CRED", "+")) or (
-                    not tipo_cell and m_val > Decimal("0.00") and not any(k in concepto_clean.upper() for k in ("CARGO", "RETIRO", "COMISION", "PAGO "))
+                tipo_cell = cells[col_map["tipo"]].strip().upper() if (col_map["tipo"] is not None and col_map["tipo"] < len(cells)) else ""
+                if any(k in tipo_cell for k in ("CARGO", "RETIRO", "SALIDA", "DEBITO", "DÉBITO", "DEB", "EGRESO", "-")) or (
+                    tipo_cell in ("C", "D", "R", "S")
                 ):
-                    if m_val < Decimal("0.00"):
-                        cargo_amt = abs(m_val)
-                    else:
-                        abono_amt = abs(m_val)
+                    cargo_amt = abs(m_val)
+                elif any(k in tipo_cell for k in ("ABONO", "DEPOSITO", "DEPÓSITO", "ENTRADA", "CREDITO", "CRÉDITO", "CRED", "INGRESO", "+")) or (
+                    tipo_cell in ("A", "H", "E")
+                ):
+                    abono_amt = abs(m_val)
+                elif m_val < Decimal("0.00"):
+                    cargo_amt = abs(m_val)
                 else:
-                    if m_val < Decimal("0.00") or any(k in tipo_cell for k in ("CARGO", "RETIRO", "SALIDA", "DEB", "-")):
-                        cargo_amt = abs(m_val)
-                    else:
-                        abono_amt = abs(m_val)
+                    # Fallback cuando no hay columna de tipo: revisar palabras clave o signo
+                    abono_amt = abs(m_val)
 
-        if (cargo_amt is None or cargo_amt == Decimal("0.00")) and (abono_amt is None or abono_amt == Decimal("0.00")):
+        has_movement_amount = (cargo_amt is not None and cargo_amt > Decimal("0.00")) or (
+            abono_amt is not None and abono_amt > Decimal("0.00")
+        )
+
+        # Si la fila NO tiene ni retiro ni depósito (ej. fila divisora de mes en Excel 'SEPTIEMBRE DEL 2021 | 36,538.40' o subtotal de saldo)
+        if not has_movement_amount:
+            if not raw_extracted and saldo_amt is not None and saldo_inicial_fila is None:
+                saldo_inicial_fila = saldo_amt
             continue
+
+        # 2. Extraer Fecha (o heredar la fecha inmediata anterior en auxiliares de Excel cuando la celda viene en blanco)
+        f_date: Optional[date] = None
+        if col_map["fecha"] is not None and col_map["fecha"] < len(cells):
+            f_date = parse_csv_date(cells[col_map["fecha"]], default_year)
+        if f_date is None:
+            for c_val in cells[:3]:
+                f_date = parse_csv_date(c_val, default_year)
+                if f_date:
+                    break
+        if f_date is None and last_valid_date is not None:
+            # En hojas de Excel contables es común dejar la celda de fecha vacía cuando pertenece al mismo día o cierre de mes
+            f_date = last_valid_date
+        if f_date is None:
+            continue
+
+        last_valid_date = f_date
+        default_year = f_date.year
+
+        # 3. Extraer Concepto (uniendo columnas narrativas múltiples como Transacción + Leyenda 1..3 + SPEI en Scotiabank)
+        concept_parts: List[str] = []
+        if concept_cols:
+            for c_idx in concept_cols:
+                if c_idx < len(cells):
+                    val = cells[c_idx].strip()
+                    if val and val not in concept_parts:
+                        concept_parts.append(val)
+        elif col_map["concepto"] is not None and col_map["concepto"] < len(cells):
+            if cells[col_map["concepto"]].strip():
+                concept_parts.append(cells[col_map["concepto"]].strip())
+
+        concepto = " · ".join(concept_parts)
+
+        # Verificar si el texto en concepto era un encabezado de mes accidental
+        if concepto and _is_month_divider_concept(concepto.upper()):
+            concepto = ""
+
+        referencia = ""
+        if col_map["referencia"] is not None and col_map["referencia"] < len(cells):
+            raw_ref = cells[col_map["referencia"]].strip()
+            # Limpiar ceros a la izquierda excesivos en referencias numéricas de 20 dígitos de Scotiabank conservando al menos 6 dígitos
+            if re.match(r"^0+\d+$", raw_ref) and len(raw_ref) >= 12:
+                stripped_ref = raw_ref.lstrip("0")
+                referencia = stripped_ref if len(stripped_ref) >= 6 else raw_ref[-8:]
+            else:
+                referencia = raw_ref
+
+        if not concepto:
+            # Si no hubo texto en las columnas de concepto (ej. cargo de comisión sin texto en Excel: '29/07/2022 | | 487.20 | 33,313.15')
+            if cargo_amt is not None and cargo_amt > Decimal("0.00"):
+                concepto = "Cargo / Comisión Bancaria"
+            else:
+                concepto = "Abono / Depósito Bancario"
+
+        concepto_clean = re.sub(r"\s+", " ", concepto).strip()
+        referencia_clean = re.sub(r"\s+", " ", referencia).strip()
+
+        if not referencia_clean:
+            ref_match = re.search(
+                r"(?:REF\.?|REFERENCIA|CVE\.?\s*RASTREO|FOLIO|AUT\.?|NUM\s*OP|\bF\s+)[:\s#]*([A-Z0-9-]{3,35})",
+                concepto_clean,
+                re.IGNORECASE,
+            )
+            if ref_match:
+                referencia_clean = ref_match.group(1)
 
         if abono_amt is not None and abono_amt > Decimal("0.00") and (cargo_amt is None or cargo_amt == Decimal("0.00")):
             tipo = "ENTRADA"
@@ -560,8 +711,15 @@ def extract_movements_from_csv(
             monto = cargo_amt or Decimal("0.00")
             abono_amt = None
 
+        consec_val: Optional[int] = None
+        if col_map["consecutivo"] is not None and col_map["consecutivo"] < len(cells):
+            c_digits = re.sub(r"\D", "", cells[col_map["consecutivo"]])
+            if c_digits:
+                consec_val = int(c_digits)
+
         raw_extracted.append({
             "row_order": r_idx,
+            "consecutivo": consec_val,
             "fecha": f_date,
             "concepto": concepto_clean[:250],
             "referencia": referencia_clean[:100],
@@ -572,14 +730,13 @@ def extract_movements_from_csv(
             "saldo_resultante": saldo_amt,
         })
 
-    # 4. Detectar si el CSV viene en orden cronológico inverso (del más reciente al más antiguo) y normalizar a ascendente
+    # 4. Detectar si el CSV viene en orden cronológico inverso (del más reciente al más antiguo, como Scotiabank CSV)
     if len(raw_extracted) >= 2:
         first_d = raw_extracted[0]["fecha"]
         last_d = raw_extracted[-1]["fecha"]
         if first_d > last_d:
             raw_extracted.reverse()
         elif first_d == last_d and raw_extracted[0].get("saldo_resultante") is not None and raw_extracted[1].get("saldo_resultante") is not None:
-            # Verificar dirección por progresión aritmética de saldos
             b0 = raw_extracted[0]["saldo_resultante"]
             b1 = raw_extracted[1]["saldo_resultante"]
             m0 = raw_extracted[0]["monto"] if raw_extracted[0]["tipo"] == "ENTRADA" else -raw_extracted[0]["monto"]
@@ -596,7 +753,7 @@ def extract_movements_from_csv(
         m_hash = generate_movement_hash(cuenta_id, item["fecha"], item["monto"], item["tipo"], hash_concept)
         alt_hash = generate_movement_hash(cuenta_id, item["fecha"], item["monto"], item["tipo"], concept_str)
 
-        # Firma canónica cruzada (fecha, monto, tipo, referencia_limpia) para detectar duplicados entre PDF y CSV
+        # Firma canónica cruzada (fecha, monto, tipo, referencia_limpia) para detectar duplicados entre PDF, CSV y Excel
         ref_canon = re.sub(r"\W+", "", ref_str.upper())
         conc_canon = re.sub(r"\W+", "", concept_str.upper())[:24]
         cross_sig_ref = (item["fecha"].isoformat(), f"{item['monto']:.2f}", item["tipo"], ref_canon) if len(ref_canon) >= 4 else None
@@ -628,7 +785,7 @@ def extract_movements_from_csv(
 
     summary = build_period_summary(
         movements=movements,
-        formato_origen="CSV",
+        formato_origen=formato_origen,
         saldo_inicial_declarado=saldo_inicial_fila,
         saldo_final_declarado=meta["saldo_final_declarado"],
         fecha_reporte_declarada=meta["fecha_reporte"],
