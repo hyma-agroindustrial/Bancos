@@ -114,7 +114,8 @@ def save_estado_cuenta_pdf(clean_filename: str, content: bytes, local_dir: str) 
 
     if is_cloud_storage_enabled():
         cfg = get_supabase_config()
-        upload_bytes_to_supabase(cfg["bucket_pdfs"], clean_filename, content, "application/pdf")
+        ctype = "text/csv; charset=utf-8" if clean_filename.lower().endswith(".csv") else "application/pdf"
+        upload_bytes_to_supabase(cfg["bucket_pdfs"], clean_filename, content, ctype)
 
     return local_path
 

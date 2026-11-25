@@ -650,7 +650,6 @@ def extract_movements_from_pdf(
 
         if movements:
             return _disambiguate_intra_pdf_hashes(movements, cuenta_id, existing_hashes)
-            return _disambiguate_intra_pdf_hashes(movements, cuenta_id, existing_hashes)
 
         # B) ESTRATEGIA 2: TABLAS NATIVAS (BBVA, Santander, Banamex, etc.)
         for page in pdf.pages:
@@ -789,3 +788,51 @@ def extract_movements_from_pdf(
                         })
 
     return _disambiguate_intra_pdf_hashes(movements, cuenta_id, existing_hashes)
+
+
+def extract_pdf_header_metadata(file_bytes: bytes) -> Dict[str, Any]:
+    """
+    Extrae metadatos del encabezado del PDF (Fecha de corte / reporte, Saldo Inicial / Anterior y Saldo Final)
+    con precisión Decimal('0.01').
+    """
+    meta: Dict[str, Any] = {
+        "fecha_reporte": None,
+        "saldo_inicial_declarado": None,
+        "saldo_final_declarado": None,
+    }
+    try:
+        with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+            yr = _detect_statement_year(pdf)
+            for page in pdf.pages[:2]:
+                text = page.extract_text() or ""
+                text_up = text.upper()
+
+                if meta["fecha_reporte"] is None:
+                    m_corte = re.search(
+                        r"(?:CORTE|PERIODO|AL)\s*[:\s]*(\d{1,2}[-/][A-Z0-9]{2,3}[-/]\d{2,4})",
+                        text_up
+                    )
+                    if m_corte:
+                        dt = parse_date(m_corte.group(1), yr)
+                        if dt:
+                            meta["fecha_reporte"] = dt
+
+                if meta["saldo_inicial_declarado"] is None:
+                    m_si = re.search(
+                        r"SALDO\s*(?:ANTERIOR|INICIAL)[^\d$\n]{0,35}\$?\s*([\d,]+\.\d{2})",
+                        text_up
+                    )
+                    if m_si:
+                        meta["saldo_inicial_declarado"] = clean_amount(m_si.group(1))
+
+                if meta["saldo_final_declarado"] is None:
+                    m_sf = re.search(
+                        r"SALDO\s*(?:FINAL|ACTUAL|AL\s*CORTE)[^\d$\n]{0,35}\$?\s*([\d,]+\.\d{2})",
+                        text_up
+                    )
+                    if m_sf:
+                        meta["saldo_final_declarado"] = clean_amount(m_sf.group(1))
+    except Exception:
+        pass
+    return meta
+

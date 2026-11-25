@@ -850,7 +850,7 @@
                 <i class="ti ti-pencil-plus" aria-hidden="true"></i><span>Captura</span>
             </button>
             <button type="button" x-show="!soloLectura" class="cb-nav" :class="(!vistaReporteBancos && activeTab === 'pdf') ? 'cb-nav-on' : ''" @click="vistaReporteBancos = false; activeTab = 'pdf'; menuMovil = false">
-                <i class="ti ti-file-import" aria-hidden="true"></i><span>Carga de estado de cuenta (PDF)</span>
+                <i class="ti ti-file-import" aria-hidden="true"></i><span>Carga de estado de cuenta (PDF / CSV)</span>
             </button>
 
         <div class="cb-group">Control</div>
@@ -1145,7 +1145,7 @@
                     <span>✍️</span> <span>Captura</span>
                 </button>
                 <button x-show="!soloLectura" @click="activeTab = 'pdf'" :class="activeTab === 'pdf' ? 'tab-menu-active' : 'tab-menu-inactive text-slate-400 hover:text-slate-200'" class="py-2.5 px-3.5 sm:px-4 rounded-xl text-xs sm:text-sm flex items-center gap-1.5 whitespace-nowrap transition">
-                    <span>📄</span> <span>Carga Estado Cuenta (PDF)</span>
+                    <span>📄</span> <span>Carga Estado Cuenta (PDF / CSV)</span>
                 </button>
                 <button @click="activeTab = 'reportes'" :class="activeTab === 'reportes' ? 'tab-menu-active' : 'tab-menu-inactive text-slate-400 hover:text-slate-200'" class="py-2.5 px-3.5 sm:px-4 rounded-xl text-xs sm:text-sm flex items-center gap-1.5 whitespace-nowrap transition">
                     <span>📊</span> <span>Reportes & Movimientos</span>
@@ -1305,14 +1305,14 @@
                 </form>
             </div>
 
-            <!-- TAB 2: EXTRACCIÓN AUTOMATIZADA DE PDF BANCARIO -->
+            <!-- TAB 2: EXTRACCIÓN AUTOMATIZADA DE ESTADO DE CUENTA (PDF / CSV) -->
             <div x-show="activeTab === 'pdf' && !soloLectura" class="p-4 sm:p-6 space-y-6">
-                <div class="bg-slate-900 border border-dashed border-slate-700 rounded-2xl p-6 text-center max-w-xl mx-auto">
+                <div class="bg-slate-900 border border-dashed border-slate-700 rounded-2xl p-6 text-center max-w-3xl mx-auto">
                     <div class="text-4xl mb-2">📑</div>
-                    <h3 class="text-base font-bold text-white mb-1">Cargar Estado de Cuenta PDF</h3>
-                    <p class="text-xs text-slate-400 mb-4">Extracción inteligente con memoria de proveedores/RFC, detección de duplicados y archivado automático en el expediente.</p>
+                    <h3 class="text-base font-bold text-white mb-1">Cargar Estado de Cuenta (PDF / CSV)</h3>
+                    <p class="text-xs text-slate-400 mb-4">Extracción inteligente con detección automática de fecha del reporte, memoria de proveedores/RFC, prevención de duplicados y cuadre de saldos.</p>
 
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left mb-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-left mb-3">
                         <div>
                             <label class="block text-xs font-semibold text-slate-300 mb-1">Cuenta Destino (Activa) *</label>
                             <select x-model="pdfCuentaId" disabled class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-bold opacity-95 cursor-not-allowed">
@@ -1323,40 +1323,113 @@
                         </div>
                         <div>
                             <label class="block text-xs font-semibold text-slate-300 mb-1">Archivo PDF *</label>
-                            <input type="file" accept=".pdf" @change="onPdfFileSelected" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-500">
+                            <input type="file" x-ref="inputPdfFile" accept=".pdf" @change="onPdfFileSelected" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Archivo CSV *</label>
+                            <input type="file" x-ref="inputCsvFile" accept=".csv,.txt" @change="onCsvFileSelected" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-sky-600 file:text-white hover:file:bg-sky-500">
                         </div>
                     </div>
+
+                    <template x-if="archivoEstadoCuentaActivo">
+                        <div class="mb-3 inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-slate-950 border border-slate-800 text-xs text-emerald-400 font-semibold">
+                            <span x-text="formatoEstadoCuentaActivo === 'CSV' ? '📊 Archivo CSV listo:' : '📄 Archivo PDF listo:'"></span>
+                            <span class="text-white font-mono" x-text="archivoEstadoCuentaActivo.name"></span>
+                        </div>
+                    </template>
 
                     <div class="flex items-center justify-center gap-2 mb-4 text-xs text-slate-300">
                         <label class="inline-flex items-center gap-2 cursor-pointer bg-slate-950/80 border border-slate-800 px-3 py-1.5 rounded-xl">
                             <input type="checkbox" x-model="archivarPdfAlImportar" class="rounded border-slate-700 text-emerald-600 focus:ring-emerald-500">
-                            <span>📁 Guardar automáticamente este PDF en el expediente de <strong>Estados de Cuenta</strong> al importar</span>
+                            <span>📁 Guardar automáticamente este estado de cuenta en el expediente de <strong>Estados de Cuenta</strong> al importar</span>
                         </label>
                     </div>
 
-                    <button @click="procesarPdf" :disabled="loading || !pdfFile || !pdfCuentaId" class="w-full sm:w-auto bg-emerald-600 disabled:opacity-40 hover:bg-emerald-500 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition shadow-md">
+                    <button @click="procesarPdf" :disabled="loading || (!pdfFile && !csvFile) || !pdfCuentaId" class="w-full sm:w-auto bg-emerald-600 disabled:opacity-40 hover:bg-emerald-500 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition shadow-md">
                         <span x-show="loading">Procesando estado de cuenta...</span>
                         <span x-show="!loading">🚀 Analizar y Extraer Movimientos</span>
                     </button>
+                </div>
+
+                <!-- RESUMEN CONTABLE DEL PERIODO Y FECHA DEL REPORTE DETECTADA -->
+                <div x-show="resumenPeriodoExtraido && movimientosExtraidos.length > 0" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-3">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-slate-800">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="px-2.5 py-0.5 rounded-md text-[11px] font-bold uppercase"
+                                  :class="resumenPeriodoExtraido?.formato_origen === 'CSV' ? 'bg-sky-950 text-sky-300 border border-sky-700/50' : 'bg-emerald-950 text-emerald-300 border border-emerald-700/50'"
+                                  x-text="'Reporte ' + (resumenPeriodoExtraido?.formato_origen || 'PDF')"></span>
+                            <span class="text-xs font-bold text-white">
+                                📅 Periodo Detectado: <span class="text-emerald-400" x-text="resumenPeriodoExtraido?.periodo_etiqueta || 'Automático'"></span>
+                            </span>
+                            <template x-if="resumenPeriodoExtraido?.fecha_reporte">
+                                <span class="text-[11px] text-slate-400 font-mono">
+                                    · Fecha de Corte/Reporte: <strong class="text-slate-200" x-text="resumenPeriodoExtraido.fecha_reporte"></strong>
+                                </span>
+                            </template>
+                        </div>
+                        <div>
+                            <template x-if="resumenPeriodoExtraido?.cuadra_exacto">
+                                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-950/90 text-emerald-300 border border-emerald-700/50">
+                                    ✅ Cuadre Contable Exacto
+                                </span>
+                            </template>
+                            <template x-if="resumenPeriodoExtraido && !resumenPeriodoExtraido.cuadra_exacto">
+                                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-950/90 text-amber-300 border border-amber-700/50">
+                                    ⚠️ Diferencia vs Saldo Banco: <span class="font-mono" x-text="formatMoney(resumenPeriodoExtraido.diferencia_cuadre)"></span>
+                                </span>
+                            </template>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                        <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3">
+                            <div class="text-[11px] text-slate-400 font-semibold">Saldo Inicial del Periodo</div>
+                            <div class="text-sm font-mono font-bold text-slate-200 mt-0.5" x-text="formatMoney(resumenPeriodoExtraido?.saldo_inicial || 0)"></div>
+                            <div class="text-[10px] text-slate-500 mt-0.5">Detectado del estado de cuenta</div>
+                        </div>
+                        <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3">
+                            <div class="text-[11px] text-slate-400 font-semibold">(+) Total Abonos / Depósitos</div>
+                            <div class="text-sm font-mono font-bold text-emerald-400 mt-0.5" x-text="formatMoney(resumenPeriodoExtraido?.total_abonos || 0)"></div>
+                            <div class="text-[10px] text-slate-500 mt-0.5"><span x-text="resumenPeriodoExtraido?.conteo_abonos || 0"></span> abono(s) en el periodo</div>
+                        </div>
+                        <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3">
+                            <div class="text-[11px] text-slate-400 font-semibold">(-) Total Cargos / Retiros</div>
+                            <div class="text-sm font-mono font-bold text-rose-400 mt-0.5" x-text="formatMoney(resumenPeriodoExtraido?.total_cargos || 0)"></div>
+                            <div class="text-[10px] text-slate-500 mt-0.5"><span x-text="resumenPeriodoExtraido?.conteo_cargos || 0"></span> cargo(s) en el periodo</div>
+                        </div>
+                        <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3">
+                            <div class="text-[11px] text-slate-400 font-semibold">(=) Saldo Final Calculado</div>
+                            <div class="text-sm font-mono font-bold text-white mt-0.5" x-text="formatMoney(resumenPeriodoExtraido?.saldo_final_calculado || 0)"></div>
+                            <div class="text-[10px] text-slate-500 mt-0.5" x-text="resumenPeriodoExtraido?.saldo_final_archivo !== null && resumenPeriodoExtraido?.saldo_final_archivo !== undefined ? ('Saldo archivo: ' + formatMoney(resumenPeriodoExtraido.saldo_final_archivo)) : 'Saldo Inicial + Abonos - Cargos'"></div>
+                        </div>
+                    </div>
+
+                    <template x-if="resumenPeriodoExtraido?.advertencias && resumenPeriodoExtraido.advertencias.length > 0">
+                        <div class="bg-amber-950/40 border border-amber-700/60 rounded-xl p-3 text-xs text-amber-200 space-y-1">
+                            <template x-for="(adv, aIdx) in resumenPeriodoExtraido.advertencias" :key="aIdx">
+                                <div x-text="adv"></div>
+                            </template>
+                        </div>
+                    </template>
                 </div>
 
                 <!-- TABLA DE MOVIMIENTOS EXTRAÍDOS -->
                 <div x-show="movimientosExtraidos.length > 0" class="space-y-4">
                     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-900/60 border border-slate-800 rounded-xl p-3.5">
                         <div>
-                            <h4 class="text-sm font-bold text-white">Movimientos Extraídos del PDF (<span x-text="movimientosExtraidos.length"></span>)</h4>
+                            <h4 class="text-sm font-bold text-white">Movimientos Extraídos (<span x-text="movimientosExtraidos.length"></span>)</h4>
                             <p class="text-xs text-slate-400">Verifica o ajusta concepto, categoría fiscal y beneficiario antes de importar.</p>
                         </div>
                         <div class="flex flex-wrap items-center gap-3">
                             <div class="text-xs px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800">
-                                <span class="text-slate-400">Abonos:</span>
-                                <span class="font-mono font-bold text-emerald-400 ml-1" x-text="formatMoney(movimientosExtraidos.filter(m => !m.es_duplicado && m.tipo === 'ENTRADA').reduce((acc, m) => acc + Number(m.monto || 0), 0))"></span>
+                                <span class="text-slate-400">Abonos a importar:</span>
+                                <span class="font-mono font-bold text-emerald-400 ml-1" x-text="formatMoney(sumarMontosExactos(movimientosExtraidos.filter(m => !m.es_duplicado && m.tipo === 'ENTRADA')))"></span>
                             </div>
                             <div class="text-xs px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800">
-                                <span class="text-slate-400">Cargos:</span>
-                                <span class="font-mono font-bold text-rose-400 ml-1" x-text="formatMoney(movimientosExtraidos.filter(m => !m.es_duplicado && m.tipo === 'SALIDA').reduce((acc, m) => acc + Number(m.monto || 0), 0))"></span>
+                                <span class="text-slate-400">Cargos a importar:</span>
+                                <span class="font-mono font-bold text-rose-400 ml-1" x-text="formatMoney(sumarMontosExactos(movimientosExtraidos.filter(m => !m.es_duplicado && m.tipo === 'SALIDA')))"></span>
                             </div>
-                            <button @click="guardarLotePdf" :disabled="loading || movimientosExtraidos.filter(m => !m.es_duplicado).length === 0" class="bg-emerald-600 disabled:opacity-40 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-md">
+                            <button @click="guardarLotePdf" :disabled="loading || movimientosExtraidos.filter(m => !m.es_duplicado).length === 0 || resumenPeriodoExtraido?.periodo_cerrado" class="bg-emerald-600 disabled:opacity-40 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-md">
                                 💾 Confirmar e Importar (<span x-text="movimientosExtraidos.filter(m => !m.es_duplicado).length"></span>)
                             </button>
                         </div>
@@ -3222,9 +3295,11 @@
                 entidades: [],
                 transacciones: [],
                 movimientosExtraidos: [],
+                resumenPeriodoExtraido: null,
                 listaUsuarios: [],
 
                 pdfFile: null,
+                csvFile: null,
                 pdfCuentaId: '',
                 openMenuBancos: false,
                 vistaReporteBancos: false,
@@ -4336,16 +4411,51 @@
                     }
                 },
 
+                get archivoEstadoCuentaActivo() {
+                    return this.csvFile || this.pdfFile || null;
+                },
+
+                get formatoEstadoCuentaActivo() {
+                    if (this.csvFile) return 'CSV';
+                    if (this.pdfFile) return 'PDF';
+                    return '';
+                },
+
+                sumarMontosExactos(lista) {
+                    if (!Array.isArray(lista) || lista.length === 0) return 0;
+                    const totalCents = lista.reduce((acc, item) => {
+                        const raw = String(item?.monto ?? '0').replace(/[^0-9.-]/g, '');
+                        const val = Number.parseFloat(raw);
+                        return acc + (Number.isFinite(val) ? Math.round(val * 100) : 0);
+                    }, 0);
+                    return totalCents / 100;
+                },
+
                 onPdfFileSelected(event) {
-                    this.pdfFile = event.target.files[0];
+                    const f = event.target.files[0] || null;
+                    this.pdfFile = f;
+                    if (f) {
+                        this.csvFile = null;
+                        if (this.$refs.inputCsvFile) this.$refs.inputCsvFile.value = '';
+                    }
+                },
+
+                onCsvFileSelected(event) {
+                    const f = event.target.files[0] || null;
+                    this.csvFile = f;
+                    if (f) {
+                        this.pdfFile = null;
+                        if (this.$refs.inputPdfFile) this.$refs.inputPdfFile.value = '';
+                    }
                 },
 
                 async procesarPdf() {
-                    if (!this.pdfFile || !this.pdfCuentaId) return;
+                    const archivo = this.archivoEstadoCuentaActivo;
+                    if (!archivo || !this.pdfCuentaId) return;
                     this.loading = true;
                     const formData = new FormData();
                     formData.append('cuenta_id', this.pdfCuentaId);
-                    formData.append('file', this.pdfFile);
+                    formData.append('file', archivo);
 
                     try {
                         const res = await fetch('/api/transacciones/upload-pdf', {
@@ -4353,17 +4463,25 @@
                             body: formData
                         });
                         if (res.ok) {
-                            this.movimientosExtraidos = await res.json();
+                            const data = await res.json();
+                            if (Array.isArray(data)) {
+                                this.movimientosExtraidos = data;
+                                this.resumenPeriodoExtraido = null;
+                            } else {
+                                this.movimientosExtraidos = data.movimientos || [];
+                                this.resumenPeriodoExtraido = data.resumen || null;
+                            }
                             if (this.movimientosExtraidos.length === 0) {
-                                alert('⚠️ No se detectaron movimientos en el estado de cuenta.\n\nVerifica que el archivo contenga texto seleccionable.');
+                                alert('⚠️ No se detectaron movimientos en el estado de cuenta.\n\nVerifica que el archivo contenga movimientos válidos.');
                             } else {
                                 const nuevos = this.movimientosExtraidos.filter(m => !m.es_duplicado).length;
                                 const duplicados = this.movimientosExtraidos.filter(m => m.es_duplicado).length;
-                                alert(`✅ ¡Extracción completada!\n\nSe extrajeron ${this.movimientosExtraidos.length} movimientos (${nuevos} nuevos, ${duplicados} ya registrados previamente).\n\nRevisa la tabla abajo y presiona "Confirmar e Importar".`);
+                                const perTxt = this.resumenPeriodoExtraido?.periodo_etiqueta ? `\n📅 Periodo detectado: ${this.resumenPeriodoExtraido.periodo_etiqueta}` : '';
+                                alert(`✅ ¡Extracción completada!${perTxt}\n\nSe extrajeron ${this.movimientosExtraidos.length} movimientos (${nuevos} nuevos, ${duplicados} ya registrados previamente).\n\nRevisa el resumen de saldos y la tabla abajo, y presiona "Confirmar e Importar".`);
                             }
                         } else {
-                            const err = await res.json();
-                            alert(err.detail || 'Error al procesar el archivo PDF');
+                            const err = await res.json().catch(() => ({}));
+                            alert(err.detail || 'Error al procesar el estado de cuenta.');
                         }
                     } finally {
                         this.loading = false;
@@ -4373,6 +4491,7 @@
                 async guardarLotePdf() {
                     this.loading = true;
                     try {
+                        const archivo = this.archivoEstadoCuentaActivo;
                         const cuentaDestinoId = parseInt(this.pdfCuentaId);
                         const movimientosSanitizados = this.movimientosExtraidos.map(m => ({
                             ...m,
@@ -4381,7 +4500,10 @@
                         }));
                         const payload = {
                             cuenta_id: cuentaDestinoId,
-                            archivo_nombre: this.pdfFile ? this.pdfFile.name : 'estado_cuenta.pdf',
+                            archivo_nombre: archivo ? archivo.name : 'estado_cuenta.pdf',
+                            origen_formato: this.formatoEstadoCuentaActivo || 'PDF',
+                            anio_reporte: this.resumenPeriodoExtraido?.anio_detectado || null,
+                            mes_reporte: this.resumenPeriodoExtraido?.mes_detectado || null,
                             archivar_pdf: Boolean(this.archivarPdfAlImportar),
                             usuario_registro: this.usuarioActual ? this.usuarioActual.username : 'admin',
                             movimientos: movimientosSanitizados
@@ -4395,7 +4517,11 @@
                             const data = await res.json();
                             alert(data.message);
                             this.movimientosExtraidos = [];
+                            this.resumenPeriodoExtraido = null;
                             this.pdfFile = null;
+                            this.csvFile = null;
+                            if (this.$refs.inputPdfFile) this.$refs.inputPdfFile.value = '';
+                            if (this.$refs.inputCsvFile) this.$refs.inputCsvFile.value = '';
                             this.filtros.cuenta_id = String(cuentaDestinoId);
                             this.filtros.fecha_inicio = '';
                             this.filtros.fecha_fin = '';
@@ -4405,7 +4531,7 @@
                             this.activeTab = 'reportes';
                         } else {
                             const err = await res.json().catch(() => ({}));
-                            alert(err.detail || 'Error al importar los movimientos del PDF.');
+                            alert(err.detail || 'Error al importar los movimientos del estado de cuenta.');
                         }
                     } finally {
                         this.loading = false;

@@ -302,7 +302,7 @@ class ConciliacionCierrePayload(BaseModel):
     cerrado: Optional[bool] = None
     usuario: Optional[str] = None
 
-# --- PDF PREVIEW / BATCH ---
+# --- PDF / CSV PREVIEW & BATCH ---
 class MovimientoExtraido(BaseModel):
     fecha: date
     concepto: str
@@ -329,9 +329,39 @@ class MovimientoExtraido(BaseModel):
         except (ValueError, TypeError):
             return None
 
+class ResumenPeriodoExtraido(BaseModel):
+    formato_origen: str = "PDF"
+    fecha_reporte: Optional[date] = None
+    fecha_inicio: Optional[date] = None
+    fecha_fin: Optional[date] = None
+    mes_detectado: Optional[int] = None
+    anio_detectado: Optional[int] = None
+    periodo_etiqueta: str = ""
+    saldo_inicial: Decimal = Decimal("0.00")
+    total_abonos: Decimal = Decimal("0.00")
+    total_cargos: Decimal = Decimal("0.00")
+    conteo_abonos: int = 0
+    conteo_cargos: int = 0
+    total_movimientos: int = 0
+    saldo_final_calculado: Decimal = Decimal("0.00")
+    saldo_final_archivo: Optional[Decimal] = None
+    diferencia_cuadre: Decimal = Decimal("0.00")
+    cuadra_exacto: bool = True
+    moneda_detectada: Optional[str] = None
+    cuenta_detectada: Optional[str] = None
+    periodo_cerrado: bool = False
+    advertencias: List[str] = Field(default_factory=list)
+
+class ExtraccionEstadoCuentaResponse(BaseModel):
+    resumen: ResumenPeriodoExtraido
+    movimientos: List[MovimientoExtraido]
+
 class BatchImportConfirm(BaseModel):
     cuenta_id: int
     archivo_nombre: str
+    origen_formato: Optional[str] = None
+    anio_reporte: Optional[int] = None
+    mes_reporte: Optional[int] = None
     archivar_pdf: Optional[bool] = True
     usuario_registro: Optional[str] = None
     movimientos: List[MovimientoExtraido]

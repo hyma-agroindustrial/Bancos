@@ -37,12 +37,13 @@ from .schemas import (
     EntidadCreate, EntidadUpdate, EntidadResponse,
     TransaccionCreate, TransaccionUpdate, TransaccionResponse,
     BulkTransaccionUpdate, ConciliacionCierrePayload,
-    MovimientoExtraido, BatchImportConfirm,
+    MovimientoExtraido, ResumenPeriodoExtraido, ExtraccionEstadoCuentaResponse, BatchImportConfirm,
     UsuarioLogin, UsuarioCreate, UsuarioUpdate, UsuarioResponse, AuthResponse,
     ConfiguracionData, EstadoCuentaArchivoResponse
 )
 from .autocategorizar import construir_historial, pistas as pistas_de, sugerir as sugerir_categoria, _TIPO_ETIQUETA
-from .parsers.bank_pdf_parser import extract_movements_from_pdf, generate_movement_hash
+from .parsers.bank_pdf_parser import extract_movements_from_pdf, extract_pdf_header_metadata, generate_movement_hash
+from .parsers.bank_csv_parser import extract_movements_from_csv, build_period_summary
 
 # Inicializar Base de Datos
 Base.metadata.create_all(bind=engine)
@@ -1207,13 +1208,47 @@ def eliminar_transaccion(transaccion_id: int, request: Request, db: Session = De
 
 
 # ====================================================================================================
-# 4. EXTRACCIÓN AUTOMATIZADA DE PDF BANCARIO (ESTADOS DE CUENTA CON AUTO-APRENDIZAJE Y ARCHIVADO)
+# 4. EXTRACCIÓN AUTOMATIZADA DE ESTADOS DE CUENTA (PDF Y CSV CON AUTO-APRENDIZAJE, CUADRE Y ARCHIVADO)
 # ====================================================================================================
 STORAGE_EDOS_DIR = os.path.join(os.path.dirname(__file__), "storage", "estados_cuenta")
 os.makedirs(STORAGE_EDOS_DIR, exist_ok=True)
 PENDING_PDF_UPLOADS: Dict[str, bytes] = {}
 
-@app.post("/api/transacciones/upload-pdf", response_model=List[MovimientoExtraido])
+
+def _construir_firmas_existentes(db: Session, cuenta_id: int):
+    """
+    Construye tanto el conjunto de hashes SHA-256 como las firmas canónicas
+    (fecha, monto_exacto, tipo, referencia/concepto) de la cuenta para garantizar
+    idempotencia cruzada entre importaciones PDF, CSV y capturas manuales.
+    """
+    existing_txs = db.query(
+        Transaccion.hash_deduplicacion,
+        Transaccion.fecha,
+        Transaccion.monto,
+        Transaccion.tipo,
+        Transaccion.referencia,
+        Transaccion.concepto,
+    ).filter(Transaccion.cuenta_id == cuenta_id).all()
+
+    existing_hashes = set()
+    existing_signatures = set()
+    for h_val, f_val, m_val, t_val, r_val, c_val in existing_txs:
+        if h_val:
+            existing_hashes.add(h_val)
+        if f_val and m_val is not None and t_val:
+            f_iso = f_val.isoformat()
+            m_str = f"{Decimal(str(m_val)).quantize(Decimal('0.01')):.2f}"
+            ref_canon = re.sub(r"\W+", "", str(r_val or "").upper())
+            conc_canon = re.sub(r"\W+", "", str(c_val or "").upper())[:24]
+            if len(ref_canon) >= 4:
+                existing_signatures.add((f_iso, m_str, t_val, ref_canon))
+            if conc_canon:
+                existing_signatures.add((f_iso, m_str, t_val, conc_canon))
+    return existing_hashes, existing_signatures
+
+
+@app.post("/api/transacciones/upload-pdf", response_model=ExtraccionEstadoCuentaResponse)
+@app.post("/api/transacciones/upload-estado-cuenta", response_model=ExtraccionEstadoCuentaResponse)
 async def extraer_movimientos_pdf(
     request: Request,
     cuenta_id: int = Form(...),
@@ -1225,23 +1260,66 @@ async def extraer_movimientos_pdf(
     if not cuenta:
         raise HTTPException(status_code=404, detail="Cuenta bancaria especificada no existe.")
 
-    if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="El archivo debe ser un documento PDF válido.")
+    filename_raw = (file.filename or "").strip()
+    ext = os.path.splitext(filename_raw)[1].lower()
+    if ext not in (".pdf", ".csv"):
+        raise HTTPException(status_code=400, detail="El archivo debe ser un Estado de Cuenta válido en formato PDF (.pdf) o CSV (.csv).")
 
     content = await file.read()
     if len(content) == 0:
-        raise HTTPException(status_code=400, detail="El archivo PDF está vacío.")
+        raise HTTPException(status_code=400, detail=f"El archivo {ext.upper()} está vacío.")
 
-    # Guardar temporalmente los bytes del PDF para archivarlo automáticamente en "Estados de Cuenta" al confirmar importación
-    PENDING_PDF_UPLOADS[f"{cuenta_id}:{file.filename}"] = content
+    # Guardar temporalmente los bytes para archivarlo automáticamente en "Estados de Cuenta" al confirmar importación
+    PENDING_PDF_UPLOADS[f"{cuenta_id}:{filename_raw}"] = content
 
-    existing_hashes = set(
-        h[0] for h in db.query(Transaccion.hash_deduplicacion).filter(
-            Transaccion.cuenta_id == cuenta_id, Transaccion.hash_deduplicacion != None
-        ).all()
-    )
+    existing_hashes, existing_signatures = _construir_firmas_existentes(db, cuenta_id)
 
-    movimientos = extract_movements_from_pdf(content, cuenta_id, existing_hashes)
+    if ext == ".csv":
+        movimientos, resumen_dict = extract_movements_from_csv(
+            content,
+            cuenta_id,
+            existing_hashes,
+            existing_signatures=existing_signatures,
+            cuenta_obj=cuenta,
+        )
+    else:
+        movimientos = extract_movements_from_pdf(content, cuenta_id, existing_hashes)
+        # Verificar también firmas cruzadas contra CSV/Manual
+        for m in movimientos:
+            if not m.get("es_duplicado"):
+                f_iso = m["fecha"].isoformat()
+                m_str = f"{Decimal(str(m['monto'])).quantize(Decimal('0.01')):.2f}"
+                ref_canon = re.sub(r"\W+", "", str(m.get("referencia") or "").upper())
+                conc_canon = re.sub(r"\W+", "", str(m.get("concepto") or "").upper())[:24]
+                if (len(ref_canon) >= 4 and (f_iso, m_str, m["tipo"], ref_canon) in existing_signatures) or (
+                    conc_canon and (f_iso, m_str, m["tipo"], conc_canon) in existing_signatures
+                ):
+                    m["es_duplicado"] = True
+        pdf_meta = extract_pdf_header_metadata(content)
+        resumen_dict = build_period_summary(
+            movements=movimientos,
+            formato_origen="PDF",
+            saldo_inicial_declarado=pdf_meta.get("saldo_inicial_declarado"),
+            saldo_final_declarado=pdf_meta.get("saldo_final_declarado"),
+            fecha_reporte_declarada=pdf_meta.get("fecha_reporte"),
+        )
+
+    # Verificar si el periodo detectado se encuentra cerrado en Corte de Mes
+    anio_det = resumen_dict.get("anio_detectado")
+    mes_det = resumen_dict.get("mes_detectado")
+    if anio_det and mes_det:
+        cierre = db.query(CierreMes).filter(
+            CierreMes.cuenta_id == cuenta_id,
+            CierreMes.anio == anio_det,
+            CierreMes.mes == mes_det,
+            CierreMes.cerrado == True,
+        ).first()
+        if cierre:
+            resumen_dict["periodo_cerrado"] = True
+            mes_nom = NOMBRE_MESES_CORTO.get(mes_det, str(mes_det))
+            resumen_dict.setdefault("advertencias", []).append(
+                f"🔒 El periodo {mes_nom} {anio_det} de esta cuenta está CERRADO y CONCILIADO. Desbloquéalo en 'Corte de Mes' antes de importar."
+            )
 
     cats = db.query(Categoria).filter(Categoria.activo == True).all()
     entidades_db = db.query(Entidad).filter(Entidad.activo == True).all()
@@ -1307,7 +1385,10 @@ async def extraer_movimientos_pdf(
 
         m["estatus_factura"] = inferir_estatus_factura_default(conc)
 
-    return movimientos
+    return ExtraccionEstadoCuentaResponse(
+        resumen=ResumenPeriodoExtraido(**resumen_dict),
+        movimientos=movimientos
+    )
 
 @app.post("/api/transacciones/batch-import")
 def confirmar_importacion_lote(payload: BatchImportConfirm, request: Request, db: Session = Depends(get_db)):
@@ -1317,102 +1398,125 @@ def confirmar_importacion_lote(payload: BatchImportConfirm, request: Request, db
     insertados = 0
     ignorados = 0
 
-    hashes_db = set(
+    ext_origen = os.path.splitext(payload.archivo_nombre or "")[1].lower()
+    es_csv = (ext_origen == ".csv") or ((payload.origen_formato or "").upper() == "CSV")
+    origen_str = "CSV_EXTRACT" if es_csv else "PDF_EXTRACT"
+
+    hashes_db, firmas_db = _construir_firmas_existentes(db, payload.cuenta_id)
+    hashes_global = set(
         h[0] for h in db.query(Transaccion.hash_deduplicacion).filter(
             Transaccion.hash_deduplicacion != None
         ).all()
     )
+    hashes_db.update(hashes_global)
+
     hashes_lote = set()
     occurrence_counts: Dict[str, int] = {}
 
-    for m in payload.movimientos:
-        if m.es_duplicado:
-            ignorados += 1
-            continue
-
-        verificar_mes_cerrado(db, payload.cuenta_id, m.fecha)
-
-        base_hash = m.hash_deduplicacion
-        count = occurrence_counts.get(base_hash, 0) + 1
-        occurrence_counts[base_hash] = count
-
-        final_hash = base_hash
-        if count > 1 or final_hash in hashes_lote:
-            ref_part = m.referencia or ""
-            base_concept = f"{m.concepto} {ref_part}".strip() if ref_part else m.concepto
-            seq = count if count > 1 else 2
-            while True:
-                candidate = generate_movement_hash(
-                    payload.cuenta_id,
-                    m.fecha,
-                    Decimal(str(m.monto)),
-                    m.tipo,
-                    f"{base_concept} #{seq}"
-                )
-                if candidate not in hashes_lote:
-                    final_hash = candidate
-                    break
-                seq += 1
-
-        if final_hash in hashes_db:
-            ignorados += 1
-            continue
-
-        hashes_lote.add(final_hash)
-
-        est_factura = m.estatus_factura or inferir_estatus_factura_default(m.concepto)
-
-        nueva_trans = Transaccion(
-            cuenta_id=payload.cuenta_id,
-            categoria_id=m.categoria_id_sugerida,
-            entidad_id=m.entidad_id_sugerida,
-            fecha=m.fecha,
-            tipo=m.tipo,
-            monto=m.monto,
-            concepto=m.concepto,
-            referencia=m.referencia,
-            origen="PDF_EXTRACT",
-            archivo_fuente=payload.archivo_nombre,
-            hash_deduplicacion=final_hash,
-            estatus_factura=est_factura,
-            usuario_registro=payload.usuario_registro
-        )
-        db.add(nueva_trans)
-        aprender_regla_clasificacion(db, m.concepto, m.categoria_id_sugerida, m.entidad_id_sugerida)
-        insertados += 1
-
-    # Archivar automáticamente el PDF en el expediente de Estados de Cuenta si está habilitado
-    archivado_msg = ""
-    key_pdf = f"{payload.cuenta_id}:{payload.archivo_nombre}"
-    pdf_bytes = PENDING_PDF_UPLOADS.pop(key_pdf, None)
-    if payload.archivar_pdf and pdf_bytes and payload.movimientos:
-        primera_fecha = payload.movimientos[0].fecha
-        anio_edo = primera_fecha.year
-        mes_edo = primera_fecha.month
-        ya_archivado = db.query(EstadoCuentaArchivo).filter(
-            EstadoCuentaArchivo.cuenta_id == payload.cuenta_id,
-            EstadoCuentaArchivo.anio == anio_edo,
-            EstadoCuentaArchivo.mes == mes_edo,
-            EstadoCuentaArchivo.nombre_archivo_original == payload.archivo_nombre
-        ).first()
-        if not ya_archivado:
-            clean_filename = f"edo_{payload.cuenta_id}_{anio_edo}_{int(mes_edo):02d}_{secrets.token_hex(4)}.pdf"
-            file_path = save_estado_cuenta_pdf(clean_filename, pdf_bytes, STORAGE_EDOS_DIR)
-            nuevo_archivo = EstadoCuentaArchivo(
-                cuenta_id=payload.cuenta_id,
-                anio=anio_edo,
-                mes=mes_edo,
-                nombre_archivo_original=payload.archivo_nombre,
-                nombre_archivo_almacenado=clean_filename,
-                ruta_archivo=file_path,
-                tamano_bytes=len(pdf_bytes),
-                notas=f"Archivado automáticamente al importar {insertados} movimiento(s)."
-            )
-            db.add(nuevo_archivo)
-            archivado_msg = f" El PDF fue archivado automáticamente en Estados de Cuenta ({NOMBRE_MESES_CORTO.get(mes_edo, mes_edo)} {anio_edo})."
-
     try:
+        # 1. Validación previa atómica: verificar que ningún movimiento nuevo caiga en un mes cerrado
+        for m in payload.movimientos:
+            if not m.es_duplicado:
+                verificar_mes_cerrado(db, payload.cuenta_id, m.fecha)
+
+        for m in payload.movimientos:
+            if m.es_duplicado:
+                ignorados += 1
+                continue
+
+            monto_exacto = Decimal(str(m.monto)).quantize(Decimal("0.01"))
+            base_hash = m.hash_deduplicacion
+            count = occurrence_counts.get(base_hash, 0) + 1
+            occurrence_counts[base_hash] = count
+
+            final_hash = base_hash
+            if count > 1 or final_hash in hashes_lote:
+                ref_part = m.referencia or ""
+                base_concept = f"{m.concepto} {ref_part}".strip() if ref_part else m.concepto
+                seq = count if count > 1 else 2
+                while True:
+                    candidate = generate_movement_hash(
+                        payload.cuenta_id,
+                        m.fecha,
+                        monto_exacto,
+                        m.tipo,
+                        f"{base_concept} #{seq}"
+                    )
+                    if candidate not in hashes_lote:
+                        final_hash = candidate
+                        break
+                    seq += 1
+
+            if final_hash in hashes_db:
+                ignorados += 1
+                continue
+
+            hashes_lote.add(final_hash)
+
+            est_factura = m.estatus_factura or inferir_estatus_factura_default(m.concepto)
+
+            nueva_trans = Transaccion(
+                cuenta_id=payload.cuenta_id,
+                categoria_id=m.categoria_id_sugerida,
+                entidad_id=m.entidad_id_sugerida,
+                fecha=m.fecha,
+                tipo=m.tipo,
+                monto=monto_exacto,
+                concepto=m.concepto,
+                referencia=m.referencia,
+                origen=origen_str,
+                archivo_fuente=payload.archivo_nombre,
+                hash_deduplicacion=final_hash,
+                estatus_factura=est_factura,
+                usuario_registro=payload.usuario_registro
+            )
+            db.add(nueva_trans)
+            aprender_regla_clasificacion(db, m.concepto, m.categoria_id_sugerida, m.entidad_id_sugerida)
+            insertados += 1
+
+        # Archivar automáticamente el archivo (PDF o CSV) en el expediente de Estados de Cuenta si está habilitado
+        archivado_msg = ""
+        key_file = f"{payload.cuenta_id}:{payload.archivo_nombre}"
+        file_bytes = PENDING_PDF_UPLOADS.pop(key_file, None)
+        if payload.archivar_pdf and file_bytes and payload.movimientos:
+            if payload.anio_reporte and payload.mes_reporte:
+                anio_edo = int(payload.anio_reporte)
+                mes_edo = int(payload.mes_reporte)
+            else:
+                # Moda de año/mes entre los movimientos del lote
+                m_counts: Dict[tuple, int] = {}
+                for mov in payload.movimientos:
+                    k = (mov.fecha.year, mov.fecha.month)
+                    m_counts[k] = m_counts.get(k, 0) + 1
+                anio_edo, mes_edo = max(m_counts, key=m_counts.get)
+
+            ya_archivado = db.query(EstadoCuentaArchivo).filter(
+                EstadoCuentaArchivo.cuenta_id == payload.cuenta_id,
+                EstadoCuentaArchivo.anio == anio_edo,
+                EstadoCuentaArchivo.mes == mes_edo,
+                EstadoCuentaArchivo.nombre_archivo_original == payload.archivo_nombre
+            ).first()
+            if not ya_archivado:
+                ext_save = ".csv" if es_csv else ".pdf"
+                clean_filename = f"edo_{payload.cuenta_id}_{anio_edo}_{int(mes_edo):02d}_{secrets.token_hex(4)}{ext_save}"
+                file_path = save_estado_cuenta_pdf(clean_filename, file_bytes, STORAGE_EDOS_DIR)
+                nuevo_archivo = EstadoCuentaArchivo(
+                    cuenta_id=payload.cuenta_id,
+                    anio=anio_edo,
+                    mes=mes_edo,
+                    nombre_archivo_original=payload.archivo_nombre,
+                    nombre_archivo_almacenado=clean_filename,
+                    ruta_archivo=file_path,
+                    tamano_bytes=len(file_bytes),
+                    notas=f"Archivado automáticamente ({'CSV' if es_csv else 'PDF'}) al importar {insertados} movimiento(s)."
+                )
+                db.add(nuevo_archivo)
+                archivado_msg = f" El archivo {'CSV' if es_csv else 'PDF'} fue archivado automáticamente en Estados de Cuenta ({NOMBRE_MESES_CORTO.get(mes_edo, mes_edo)} {anio_edo})."
+
         db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error al guardar los movimientos: {str(e)}")
@@ -1754,10 +1858,10 @@ async def subir_archivo_estado_cuenta(
         raise HTTPException(status_code=400, detail="No se seleccionó ningún archivo.")
 
     ext = os.path.splitext(file.filename)[1].lower()
-    if ext != ".pdf":
-        raise HTTPException(status_code=400, detail="Únicamente se permiten archivos PDF del Estado de Cuenta Bancario.")
+    if ext not in (".pdf", ".csv"):
+        raise HTTPException(status_code=400, detail="Únicamente se permiten archivos PDF o CSV del Estado de Cuenta Bancario.")
 
-    clean_filename = f"edo_{cuenta_id}_{anio}_{int(mes):02d}_{secrets.token_hex(4)}.pdf"
+    clean_filename = f"edo_{cuenta_id}_{anio}_{int(mes):02d}_{secrets.token_hex(4)}{ext}"
     content = await file.read()
     file_path = save_estado_cuenta_pdf(clean_filename, content, STORAGE_EDOS_DIR)
 
@@ -1825,10 +1929,11 @@ def descargar_archivo_estado_cuenta(archivo_id: int, request: Request, db: Sessi
     if not resolved_path:
         raise HTTPException(status_code=404, detail="El archivo físico no se encuentra en el servidor ni en la bóveda en la nube.")
 
+    es_csv = (archivo.nombre_archivo_almacenado or "").lower().endswith(".csv")
     return FileResponse(
         path=resolved_path,
         filename=archivo.nombre_archivo_original,
-        media_type="application/pdf"
+        media_type="text/csv; charset=utf-8" if es_csv else "application/pdf"
     )
 
 @app.get("/api/archivos-estado-cuenta/{archivo_id}/ver")
@@ -1844,9 +1949,10 @@ def ver_archivo_estado_cuenta_inline(archivo_id: int, request: Request, db: Sess
     if not resolved_path:
         raise HTTPException(status_code=404, detail="El archivo físico no se encuentra en el servidor ni en la bóveda en la nube.")
 
+    es_csv = (archivo.nombre_archivo_almacenado or "").lower().endswith(".csv")
     return FileResponse(
         path=resolved_path,
-        media_type="application/pdf"
+        media_type="text/plain; charset=utf-8" if es_csv else "application/pdf"
     )
 
 @app.delete("/api/archivos-estado-cuenta/{archivo_id}")
